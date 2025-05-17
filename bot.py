@@ -4,6 +4,7 @@ from discord.ext import commands
 from dotenv import load_dotenv
 import json
 from discord.ui import View, Button
+import sqlitecloud
 
 # Load environment variables
 load_dotenv()
@@ -19,6 +20,11 @@ ROLE_ID = 1373351745102549082  # Replace with your actual role ID
 ECONOMY_FILE = 'economy.json'
 TICKETS_FILE = 'tickets.json'
 
+SQLITECLOUD_URL = "sqlitecloud://cssltoxank.g2.sqlite.cloud:8860/chinook.sqlite?apikey=bEbaQhz2OQ8hd2w04UacrigbBhz24VZTQNf2zSFeFzo"
+
+def get_db_connection():
+    return sqlitecloud.connect(SQLITECLOUD_URL)
+
 def load_economy():
     if not os.path.exists(ECONOMY_FILE):
         return {}
@@ -30,13 +36,22 @@ def save_economy(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 def get_balance(user_id):
-    data = load_economy()
-    return data.get(str(user_id), 0)
+    conn = get_db_connection()
+    cur = conn.execute('SELECT balance FROM economy WHERE user_id = ?', (str(user_id),))
+    row = cur.fetchone()
+    conn.close()
+    return row[0] if row else 0
 
 def change_balance(user_id, amount):
-    data = load_economy()
-    data[str(user_id)] = data.get(str(user_id), 0) + amount
-    save_economy(data)
+    conn = get_db_connection()
+    cur = conn.execute('SELECT balance FROM economy WHERE user_id = ?', (str(user_id),))
+    row = cur.fetchone()
+    if row:
+        conn.execute('UPDATE economy SET balance = balance + ? WHERE user_id = ?', (amount, str(user_id)))
+    else:
+        conn.execute('INSERT INTO economy (user_id, balance) VALUES (?, ?)', (str(user_id), amount))
+    conn.commit()
+    conn.close()
 
 def load_tickets():
     if not os.path.exists(TICKETS_FILE):
@@ -49,14 +64,23 @@ def save_tickets(data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 def add_ticket(user_id, amount, issuer_id):
-    data = load_tickets()
-    user_tickets = data.get(str(user_id), [])
-    user_tickets.append({
-        'amount': amount,
-        'issuer_id': issuer_id
-    })
-    data[str(user_id)] = user_tickets
-    save_tickets(data)
+    conn = get_db_connection()
+    conn.execute('INSERT INTO tickets (user_id, amount, issuer_id) VALUES (?, ?, ?)', (str(user_id), amount, str(issuer_id)))
+    conn.commit()
+    conn.close()
+
+def get_tickets(user_id):
+    conn = get_db_connection()
+    cur = conn.execute('SELECT id, amount, issuer_id FROM tickets WHERE user_id = ?', (str(user_id),))
+    tickets = [{'id': row[0], 'amount': row[1], 'issuer_id': row[2]} for row in cur.fetchall()]
+    conn.close()
+    return tickets
+
+def remove_ticket(ticket_id):
+    conn = get_db_connection()
+    conn.execute('DELETE FROM tickets WHERE id = ?', (ticket_id,))
+    conn.commit()
+    conn.close()
 
 class TicketPayView(View):
     def __init__(self, user_id, tickets):
@@ -77,7 +101,7 @@ class TicketPayButton(Button):
         if interaction.user.id != self.user_id:
             await interaction.response.send_message('هذا الزر ليس لك.', ephemeral=True)
             return
-        tickets = load_tickets().get(str(self.user_id), [])
+        tickets = get_tickets(self.user_id)
         if self.idx >= len(tickets):
             await interaction.response.send_message('هذه المخالفة لم تعد موجودة.', ephemeral=True)
             return
@@ -88,10 +112,7 @@ class TicketPayButton(Button):
             return
         # Pay the ticket
         change_balance(self.user_id, -int(ticket['amount']))
-        tickets.pop(self.idx)
-        data = load_tickets()
-        data[str(self.user_id)] = tickets
-        save_tickets(data)
+        remove_ticket(ticket['id'])
         await interaction.response.send_message(f'تم دفع مخالفة بقيمة {ticket["amount"]} ريال بنجاح! رصيدك الحالي: {get_balance(self.user_id)} ريال', ephemeral=True)
 
 @bot.event
@@ -128,7 +149,7 @@ async def my_balance(ctx):
 @bot.command(name='مخالفاتي')
 async def my_tickets(ctx):
     user_id = str(ctx.author.id)
-    tickets = load_tickets().get(user_id, [])
+    tickets = get_tickets(user_id)
     if not tickets:
         await ctx.send('ليس لديك مخالفات حالياً.')
         return
@@ -141,6 +162,18 @@ async def my_tickets(ctx):
         await ctx.send('تم إرسال قائمة مخالفاتك في الخاص.')
     except Exception:
         await ctx.send('لم أستطع إرسال رسالة خاصة. تأكد أن رسائلك الخاصة مفعلة.')
+
+@bot.command(name='dbtest')
+async def dbtest(ctx, tablename: str):
+    """Fetches the first row from the given table in SQLiteCloud and prints it."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.execute(f'SELECT * FROM {tablename} LIMIT 1;')
+        result = cursor.fetchone()
+        await ctx.send(f'First row in {tablename}: {result}')
+        conn.close()
+    except Exception as e:
+        await ctx.send(f'Error: {e}')
 
 # Run the bot
 bot.run(os.getenv('DISCORD_TOKEN')) 
