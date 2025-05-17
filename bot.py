@@ -20,7 +20,7 @@ ROLE_ID = 1373351745102549082  # Replace with your actual role ID
 ECONOMY_FILE = 'economy.json'
 TICKETS_FILE = 'tickets.json'
 
-SQLITECLOUD_URL = "sqlitecloud://cssltoxank.g2.sqlite.cloud:8860/chinook.sqlite?apikey=bEbaQhz2OQ8hd2w04UacrigbBhz24VZTQNf2zSFeFzo"
+SQLITECLOUD_URL = os.getenv("SQLITECLOUD_URL")
 
 def get_db_connection():
     return sqlitecloud.connect(SQLITECLOUD_URL)
