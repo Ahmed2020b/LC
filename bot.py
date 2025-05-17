@@ -175,5 +175,16 @@ async def dbtest(ctx, tablename: str):
     except Exception as e:
         await ctx.send(f'Error: {e}')
 
+# Ensure tables exist on startup
+
+def ensure_tables():
+    conn = get_db_connection()
+    conn.execute('''CREATE TABLE IF NOT EXISTS economy (user_id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS tickets (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, amount INTEGER, issuer_id TEXT)''')
+    conn.commit()
+    conn.close()
+
+ensure_tables()
+
 # Run the bot
 bot.run(os.getenv('DISCORD_TOKEN')) 
