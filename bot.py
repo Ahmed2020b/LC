@@ -113,6 +113,7 @@ async def rasad(ctx, member: discord.Member = None, amount: str = None):
     embed = discord.Embed(title='🚨 إشعار مخالفة مرورية 🚨',
                           description=f'عزيزي {member.mention},\nلقد تم رصد مخالفة مرورية بقيمة: {amount} ريال.\nيرجى مراجعة الإدارة للمزيد من التفاصيل.',
                           color=0xff0000)
+    embed.set_image(url='https://cdn.discordapp.com/attachments/1372938634390667395/1373291606131736636/2F2740FA-A534-4205-B756-89AEC7DAF65B.jpg?ex=6829e0f9&is=68288f79&hm=f9002de01279f0ee64c514a294b94a1ce6b3e5bffd911d83d304a0e17cca0308&')  # Replace with your image URL
     try:
         await member.send(embed=embed)
         await ctx.send(f'تم إضافة المخالفة إلى {member.mention} بنجاح.')
