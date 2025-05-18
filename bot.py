@@ -117,6 +117,11 @@ class TicketPayButton(Button):
         change_balance(self.user_id, -int(ticket['amount']))
         remove_ticket(ticket['id'])
         await interaction.response.send_message(f'تم دفع مخالفة بقيمة {ticket["amount"]} ريال بنجاح! رصيدك الحالي: {get_balance(self.user_id)} ريال', ephemeral=True)
+        try:
+            user = await interaction.client.fetch_user(self.user_id)
+            await user.send('تم دفع المخالفه بنجاح')
+        except Exception:
+            pass
 
 class MyBot(commands.Bot):
     async def setup_hook(self):
