@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 import json
 from discord.ui import View, Button
 import sqlitecloud
+import asyncio
+from datetime import datetime, timedelta
 
 # Load environment variables
 load_dotenv()
@@ -49,7 +51,9 @@ def change_balance(user_id, amount):
     if row:
         conn.execute('UPDATE economy SET balance = balance + ? WHERE user_id = ?', (amount, str(user_id)))
     else:
-        conn.execute('INSERT INTO economy (user_id, balance) VALUES (?, ?)', (str(user_id), amount))
+        # Set initial balance to 30,000 for new users
+        initial_balance = 30000 + amount
+        conn.execute('INSERT INTO economy (user_id, balance) VALUES (?, ?)', (str(user_id), initial_balance))
     conn.commit()
     conn.close()
 
@@ -181,10 +185,112 @@ def ensure_tables():
     conn = get_db_connection()
     conn.execute('''CREATE TABLE IF NOT EXISTS economy (user_id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)''')
     conn.execute('''CREATE TABLE IF NOT EXISTS tickets (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT, amount INTEGER, issuer_id TEXT)''')
+    conn.execute('''CREATE TABLE IF NOT EXISTS role_payments (role_id TEXT PRIMARY KEY, amount INTEGER, last_payment TIMESTAMP)''')
     conn.commit()
     conn.close()
 
+def add_role_payment(role_id, amount):
+    conn = get_db_connection()
+    conn.execute('INSERT OR REPLACE INTO role_payments (role_id, amount, last_payment) VALUES (?, ?, ?)',
+                (str(role_id), amount, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+
+def get_role_payments():
+    conn = get_db_connection()
+    cur = conn.execute('SELECT role_id, amount, last_payment FROM role_payments')
+    payments = [{'role_id': row[0], 'amount': row[1], 'last_payment': row[2]} for row in cur.fetchall()]
+    conn.close()
+    return payments
+
+def update_last_payment(role_id):
+    conn = get_db_connection()
+    conn.execute('UPDATE role_payments SET last_payment = ? WHERE role_id = ?',
+                (datetime.now().isoformat(), str(role_id)))
+    conn.commit()
+    conn.close()
+
+@bot.command(name='وضيفه')
+async def add_role_payment_cmd(ctx, role: discord.Role, amount: int):
+    """Add or update a role's daily payment amount. Only users with manage server permissions can use this command."""
+    if not ctx.author.guild_permissions.manage_guild:
+        await ctx.send('ليس لديك الصلاحية لاستخدام هذا الأمر.')
+        return
+    
+    if amount <= 0:
+        await ctx.send('يجب أن يكون المبلغ أكبر من صفر.')
+        return
+    
+    add_role_payment(role.id, amount)
+    await ctx.send(f'تم إضافة الرتبة {role.mention} بنجاح! سيتلقى الأعضاء {amount} ريال يومياً.')
+
+async def process_daily_payments():
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        try:
+            payments = get_role_payments()
+            for payment in payments:
+                role_id = int(payment['role_id'])
+                amount = payment['amount']
+                last_payment = datetime.fromisoformat(payment['last_payment'])
+                
+                # Check if 24 hours have passed since last payment
+                if datetime.now() - last_payment >= timedelta(hours=24):
+                    for guild in bot.guilds:
+                        role = guild.get_role(role_id)
+                        if role:
+                            for member in role.members:
+                                change_balance(member.id, amount)
+                            update_last_payment(role_id)
+            
+            # Wait for 1 hour before checking again
+            await asyncio.sleep(3600)
+        except Exception as e:
+            print(f"Error in daily payments: {e}")
+            await asyncio.sleep(3600)
+
+# Start the daily payment task
+bot.loop.create_task(process_daily_payments())
+
 ensure_tables()
+
+@bot.command(name='تحويل')
+async def transfer(ctx, member: discord.Member, amount: int):
+    """Transfer money to another user."""
+    if amount <= 0:
+        await ctx.send('يجب أن يكون المبلغ أكبر من صفر.')
+        return
+    
+    sender_balance = get_balance(ctx.author.id)
+    if sender_balance < amount:
+        await ctx.send(f'رصيدك غير كافٍ للتحويل. رصيدك الحالي: {sender_balance} ريال')
+        return
+    
+    # Transfer the money
+    change_balance(ctx.author.id, -amount)  # Subtract from sender
+    change_balance(member.id, amount)       # Add to receiver
+    
+    # Prepare receipt
+    now = datetime.now()
+    date_str = now.strftime('%I:%M:%S %p, %m/%d/%Y')
+    receipt = f"تم تحويل مبلغ : {amount}\n\nالمبلغ : {amount}\n\nالشخص الذي حول : {ctx.author.display_name}\n\nالتاريخ : {date_str}"
+    await ctx.send(receipt)
+
+@bot.command(name='زود')
+async def add_money(ctx, member: discord.Member, amount: int):
+    """Add money to a user's balance. Only users with manage server permissions can use this command."""
+    if not ctx.author.guild_permissions.manage_guild:
+        await ctx.send('ليس لديك الصلاحية لاستخدام هذا الأمر.')
+        return
+    
+    if amount <= 0:
+        await ctx.send('يجب أن يكون المبلغ أكبر من صفر.')
+        return
+    
+    # Add money to user's balance
+    change_balance(member.id, amount)
+    
+    await ctx.send(f'تم إضافة {amount} ريال إلى رصيد {member.mention} بنجاح!\nرصيده الحالي: {get_balance(member.id)} ريال')
 
 # Run the bot
 bot.run(os.getenv('DISCORD_TOKEN')) 
