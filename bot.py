@@ -15,7 +15,6 @@ load_dotenv()
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True  # Needed to DM users
-bot = commands.Bot(command_prefix='-', intents=intents)
 
 ROLE_ID = 1373351745102549082  # Replace with your actual role ID
 
@@ -118,6 +117,13 @@ class TicketPayButton(Button):
         change_balance(self.user_id, -int(ticket['amount']))
         remove_ticket(ticket['id'])
         await interaction.response.send_message(f'تم دفع مخالفة بقيمة {ticket["amount"]} ريال بنجاح! رصيدك الحالي: {get_balance(self.user_id)} ريال', ephemeral=True)
+
+class MyBot(commands.Bot):
+    async def setup_hook(self):
+        self.loop.create_task(process_daily_payments())
+
+# Replace the original bot instantiation with the custom class
+bot = MyBot(command_prefix='-', intents=intents)
 
 @bot.event
 async def on_ready():
@@ -248,9 +254,6 @@ async def process_daily_payments():
         except Exception as e:
             print(f"Error in daily payments: {e}")
             await asyncio.sleep(3600)
-
-# Start the daily payment task
-bot.loop.create_task(process_daily_payments())
 
 ensure_tables()
 
