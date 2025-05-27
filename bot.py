@@ -2,8 +2,27 @@ import os
 import discord
 from discord.ext import commands
 from dotenv import load_dotenv
+import sqlitecloud
 
 load_dotenv()
+
+# Database connection setup
+try:
+    conn = sqlitecloud.connect(os.getenv('DATABASE_URL'))
+    cursor = conn.cursor()
+    # Create auto-responder table if it doesn't exist
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS auto_responses (
+            guild_id TEXT,
+            trigger TEXT,
+            response TEXT,
+            PRIMARY KEY (guild_id, trigger)
+        )
+    ''')
+    conn.commit()
+    print("Successfully connected to the database!")
+except Exception as e:
+    print(f"Error connecting to database: {e}")
 
 intents = discord.Intents.default()
 intents.members = True
@@ -14,6 +33,66 @@ bot = commands.Bot(command_prefix='-', intents=intents)
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
+
+@bot.event
+async def on_message(message):
+    if message.author.bot:
+        return
+
+    # Check for auto-responses
+    try:
+        cursor.execute('SELECT response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
+                      (str(message.guild.id), message.content.lower()))
+        result = cursor.fetchone()
+        if result:
+            await message.channel.send(result[0])
+    except Exception as e:
+        print(f"Error in auto-response: {e}")
+
+    await bot.process_commands(message)
+
+@bot.command()
+@commands.has_permissions(manage_guild=True)
+async def addresponse(ctx, trigger: str, *, response: str):
+    """Add an auto-response trigger."""
+    try:
+        cursor.execute('INSERT OR REPLACE INTO auto_responses (guild_id, trigger, response) VALUES (?, ?, ?)',
+                      (str(ctx.guild.id), trigger.lower(), response))
+        conn.commit()
+        await ctx.send(f'تم إضافة الرد التلقائي: عندما يكتب أحد "{trigger}" سيرد البوت "{response}"')
+    except Exception as e:
+        await ctx.send(f'حدث خطأ أثناء إضافة الرد التلقائي: {e}')
+
+@bot.command()
+@commands.has_permissions(manage_guild=True)
+async def removeresponse(ctx, trigger: str):
+    """Remove an auto-response trigger."""
+    try:
+        cursor.execute('DELETE FROM auto_responses WHERE guild_id = ? AND trigger = ?',
+                      (str(ctx.guild.id), trigger.lower()))
+        conn.commit()
+        if cursor.rowcount > 0:
+            await ctx.send(f'تم حذف الرد التلقائي "{trigger}"')
+        else:
+            await ctx.send(f'لم يتم العثور على رد تلقائي بهذا المحفز "{trigger}"')
+    except Exception as e:
+        await ctx.send(f'حدث خطأ أثناء حذف الرد التلقائي: {e}')
+
+@bot.command()
+@commands.has_permissions(manage_guild=True)
+async def listresponses(ctx):
+    """List all auto-response triggers."""
+    try:
+        cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ?',
+                      (str(ctx.guild.id),))
+        responses = cursor.fetchall()
+        if responses:
+            response_list = '\n'.join([f'• "{trigger}" → "{response}"' for trigger, response in responses])
+            await ctx.send(f'**قائمة الردود التلقائية:**\n{response_list}')
+        else:
+            await ctx.send('لا توجد ردود تلقائية مضافة.')
+    except Exception as e:
+        await ctx.send(f'حدث خطأ أثناء عرض الردود التلقائية: {e}')
 
 @bot.command()
 @commands.has_permissions(kick_members=True)
