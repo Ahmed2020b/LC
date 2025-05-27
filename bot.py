@@ -6,6 +6,10 @@ import sqlitecloud
 
 load_dotenv()
 
+# Global database variables
+conn = None
+cursor = None
+
 # Database connection setup
 try:
     conn = sqlitecloud.connect(os.getenv('DATABASE_URL'))
@@ -41,6 +45,11 @@ async def on_message(message):
 
     # Check for auto-responses
     try:
+        global cursor
+        if cursor is None:
+            print("Database cursor is not initialized")
+            return
+            
         cursor.execute('SELECT response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
                       (str(message.guild.id), message.content.lower()))
         result = cursor.fetchone()
