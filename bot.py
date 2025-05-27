@@ -4,6 +4,7 @@ from discord.ext import commands
 from dotenv import load_dotenv
 import sqlitecloud
 
+# Last deployment: 2024-03-19
 load_dotenv()
 
 # Global database variables
