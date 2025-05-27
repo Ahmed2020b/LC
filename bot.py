@@ -15,11 +15,26 @@ cursor = None
 def initialize_database():
     global conn, cursor
     try:
-        if conn is not None:
-            conn.close()
+        # Validate DATABASE_URL
+        database_url = os.getenv('DATABASE_URL')
+        if not database_url:
+            print("Error: DATABASE_URL environment variable is not set")
+            return False
+            
+        print(f"Attempting to connect to database with URL: {database_url[:20]}...")  # Print first 20 chars for security
         
-        conn = sqlitecloud.connect(os.getenv('DATABASE_URL'))
+        if conn is not None:
+            try:
+                conn.close()
+            except:
+                pass
+        
+        conn = sqlitecloud.connect(database_url)
         cursor = conn.cursor()
+        
+        # Test the connection
+        cursor.execute('SELECT 1')
+        cursor.fetchone()
         
         # Create auto-responder table if it doesn't exist
         cursor.execute('''
@@ -34,11 +49,13 @@ def initialize_database():
         print("Successfully connected to the database!")
         return True
     except Exception as e:
-        print(f"Error connecting to database: {e}")
+        print(f"Error connecting to database: {str(e)}")
+        print("Please check your DATABASE_URL in Railway environment variables")
         return False
 
 # Initial database connection
-initialize_database()
+if not initialize_database():
+    print("WARNING: Failed to connect to database on startup. The bot will continue running but auto-responses won't work.")
 
 intents = discord.Intents.default()
 intents.members = True
@@ -51,7 +68,7 @@ async def on_ready():
     print(f'Logged in as {bot.user}')
     # Try to reconnect to database when bot starts
     if not initialize_database():
-        print("Failed to connect to database on startup")
+        print("Failed to connect to database on startup. Please check your DATABASE_URL in Railway.")
 
 @bot.event
 async def on_message(message):
