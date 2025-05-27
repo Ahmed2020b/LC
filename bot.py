@@ -128,35 +128,25 @@ async def on_message(message):
         trigger_lower = message.content.lower()
         print(f"Checking database for trigger: {trigger_lower} in guild: {current_guild_id}")
         
-        try:
-            cursor.execute('SELECT response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
-                          (current_guild_id, trigger_lower))
-            result = cursor.fetchone()
-            
-            # Debug: If no result found, try querying again once immediately
-            if not result:
-                print("Debug: Query returned no result, trying one more time...")
-                # Ensure connection is still active before re-querying
-                if ensure_db_connection():
-                     cursor.execute('SELECT response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
-                                   (current_guild_id, trigger_lower))
-                     result = cursor.fetchone()
-                     if result:
-                         print("Debug: Re-query successful.")
-                     else:
-                         print("Debug: Re-query also returned no result.")
-                else:
-                     print("Debug: Failed to re-ensure connection for re-query.")
-
-        except Exception as db_err:
-            print(f"Error executing database query: {db_err}")
-            # Further debug for specific socket error if possible (library dependent)
-            if "socket" in str(db_err).lower():
-                 print("Suspected network/socket issue during database query.")
-            ensure_db_connection() # Attempt to reconnect on query error
-            return # Stop processing this message to avoid cascading errors
-            
+        cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
+                      (current_guild_id, trigger_lower))
+        result = cursor.fetchone()
         
+        # Debug: If no result found, try querying again once immediately
+        if not result:
+            print("Debug: Query returned no result, trying one more time...")
+            # Ensure connection is still active before re-querying
+            if ensure_db_connection():
+                 cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
+                               (current_guild_id, trigger_lower))
+                 result = cursor.fetchone()
+                 if result:
+                     print("Debug: Re-query successful.")
+                 else:
+                     print("Debug: Re-query also returned no result.")
+            else:
+                 print("Debug: Failed to re-ensure connection for re-query.")
+
         if result:
             print(f"Found auto-response: {result[0]}")
             await message.channel.send(result[0])
@@ -195,7 +185,6 @@ async def on_message(message):
     await bot.process_commands(message)
     print("Processed commands.")
 
-# Removed auto-responder commands
 @bot.command()
 @commands.has_permissions(manage_guild=True)
 async def addresponse(ctx, trigger: str, *, response: str):
@@ -219,7 +208,7 @@ async def addresponse(ctx, trigger: str, *, response: str):
             await ctx.send("فشل الاتصال بقاعدة البيانات أثناء حفظ الرد. يرجى المحاولة مرة أخرى.")
             print("Failed to ensure database connection before commit in addresponse.")
             return
-
+            
         conn.commit()
         print("Changes committed.")
         
@@ -279,7 +268,7 @@ async def listresponses(ctx):
             await ctx.send("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
             print("Failed to ensure database connection in listresponses.")
             return
-                
+                    
         print(f"Conn ID: {id(conn)}, Cursor ID: {id(cursor)}") # Debug IDs
         
         # Add a small delay before querying as a debugging step
@@ -290,8 +279,12 @@ async def listresponses(ctx):
         cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ?',
                       (str(ctx.guild.id),))
         responses = cursor.fetchall()
-        print(f"SELECT executed in listresponses command. Result: {responses}") # Print the raw result
-        
+        print("Executed SELECT in listresponses command.")
+
+        # Debug: Print the raw result from the listresponses command
+        # print(f"listresponses command Result: {responses}") 
+        # print(f"SELECT executed in listresponses command. Result: {responses}") # Print the raw result
+            
         if responses:
             response_list = '\n'.join([f'• "{trigger}" → "{response}"' for trigger, response in responses])
             await ctx.send(f'**قائمة الردود التلقائية:**\n{response_list}')
