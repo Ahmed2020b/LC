@@ -3,6 +3,7 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 import sqlitecloud
+import time
 
 # Last deployment: 2024-03-19
 load_dotenv()
@@ -11,23 +12,33 @@ load_dotenv()
 conn = None
 cursor = None
 
-# Database connection setup
-try:
-    conn = sqlitecloud.connect(os.getenv('DATABASE_URL'))
-    cursor = conn.cursor()
-    # Create auto-responder table if it doesn't exist
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS auto_responses (
-            guild_id TEXT,
-            trigger TEXT,
-            response TEXT,
-            PRIMARY KEY (guild_id, trigger)
-        )
-    ''')
-    conn.commit()
-    print("Successfully connected to the database!")
-except Exception as e:
-    print(f"Error connecting to database: {e}")
+def initialize_database():
+    global conn, cursor
+    try:
+        if conn is not None:
+            conn.close()
+        
+        conn = sqlitecloud.connect(os.getenv('DATABASE_URL'))
+        cursor = conn.cursor()
+        
+        # Create auto-responder table if it doesn't exist
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS auto_responses (
+                guild_id TEXT,
+                trigger TEXT,
+                response TEXT,
+                PRIMARY KEY (guild_id, trigger)
+            )
+        ''')
+        conn.commit()
+        print("Successfully connected to the database!")
+        return True
+    except Exception as e:
+        print(f"Error connecting to database: {e}")
+        return False
+
+# Initial database connection
+initialize_database()
 
 intents = discord.Intents.default()
 intents.members = True
@@ -38,6 +49,9 @@ bot = commands.Bot(command_prefix='-', intents=intents)
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
+    # Try to reconnect to database when bot starts
+    if not initialize_database():
+        print("Failed to connect to database on startup")
 
 @bot.event
 async def on_message(message):
@@ -48,8 +62,10 @@ async def on_message(message):
     try:
         global cursor
         if cursor is None:
-            print("Database cursor is not initialized")
-            return
+            print("Attempting to reconnect to database...")
+            if not initialize_database():
+                print("Failed to reconnect to database")
+                return
             
         cursor.execute('SELECT response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
                       (str(message.guild.id), message.content.lower()))
@@ -58,6 +74,9 @@ async def on_message(message):
             await message.channel.send(result[0])
     except Exception as e:
         print(f"Error in auto-response: {e}")
+        # Try to reconnect on error
+        time.sleep(1)  # Wait a bit before reconnecting
+        initialize_database()
 
     await bot.process_commands(message)
 
@@ -66,6 +85,12 @@ async def on_message(message):
 async def addresponse(ctx, trigger: str, *, response: str):
     """Add an auto-response trigger."""
     try:
+        global cursor
+        if cursor is None:
+            if not initialize_database():
+                await ctx.send("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
+                return
+                
         cursor.execute('INSERT OR REPLACE INTO auto_responses (guild_id, trigger, response) VALUES (?, ?, ?)',
                       (str(ctx.guild.id), trigger.lower(), response))
         conn.commit()
