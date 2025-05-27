@@ -9,8 +9,10 @@ print("commands imported")
 from dotenv import load_dotenv
 import sqlitecloud
 import time
+import asyncio # Import asyncio for sleep
 print("dotenv imported")
 print("sqlitecloud and time imported")
+print("asyncio imported")
 
 # Last deployment: 2024-03-19
 
@@ -115,13 +117,17 @@ async def on_message(message):
         if not ensure_db_connection():
             print("Failed to ensure database connection before on_message query.")
             return
+            
+        print(f"Conn ID: {id(conn)}, Cursor ID: {id(cursor)}") # Debug IDs
         
+        # Add a small delay before querying as a debugging step
+        await asyncio.sleep(0.1)
+        print("Delayed before query.")
+
         current_guild_id = str(message.guild.id)
         trigger_lower = message.content.lower()
         print(f"Checking database for trigger: {trigger_lower} in guild: {current_guild_id}")
         
-        print(f"Conn ID: {id(conn)}, Cursor ID: {id(cursor)}") # Debug IDs
-
         try:
             cursor.execute('SELECT response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
                           (current_guild_id, trigger_lower))
@@ -164,6 +170,10 @@ async def on_message(message):
                     print("Failed to ensure database connection before debug listing.")
                     # Continue without listing if connection fails
                 else:
+                    print("Debug: Executing SELECT for all triggers...")
+                    # Add a small delay before debug query
+                    await asyncio.sleep(0.1)
+                    print("Debug: Delayed before debug query.")
                     cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ?', (current_guild_id,))
                     all_responses = cursor.fetchall()
                     print(f"All triggers found for guild {current_guild_id}:")
@@ -271,6 +281,11 @@ async def listresponses(ctx):
             return
                 
         print(f"Conn ID: {id(conn)}, Cursor ID: {id(cursor)}") # Debug IDs
+        
+        # Add a small delay before querying as a debugging step
+        await asyncio.sleep(0.1)
+        print("Delayed before query in listresponses.")
+
         print("Executing SELECT in listresponses command...")
         cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ?',
                       (str(ctx.guild.id),))
