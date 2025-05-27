@@ -8,6 +8,16 @@ import time
 # Last deployment: 2024-03-19
 load_dotenv()
 
+# Debug environment variables
+print("Checking environment variables...")
+print(f"Current working directory: {os.getcwd()}")
+print(f"All environment variables: {dict(os.environ)}")
+database_url = os.getenv('DATABASE_URL')
+print(f"DATABASE_URL exists: {database_url is not None}")
+if database_url:
+    print(f"DATABASE_URL length: {len(database_url)}")
+    print(f"DATABASE_URL starts with: {database_url[:20]}...")
+
 # Global database variables
 conn = None
 cursor = None
@@ -19,6 +29,7 @@ def initialize_database():
         database_url = os.getenv('DATABASE_URL')
         if not database_url:
             print("Error: DATABASE_URL environment variable is not set")
+            print("Please make sure to set DATABASE_URL in Railway's environment variables")
             return False
             
         print(f"Attempting to connect to database with URL: {database_url[:20]}...")  # Print first 20 chars for security
