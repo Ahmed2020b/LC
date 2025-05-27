@@ -148,8 +148,8 @@ async def on_message(message):
                  print("Debug: Failed to re-ensure connection for re-query.")
 
         if result:
-            print(f"Found auto-response: {result[0]}")
-            await message.channel.send(result[0])
+            print(f"Found auto-response: trigger='{result[0]}', response='{result[1]}'")
+            await message.channel.send(result[1])
             print("Sent auto-response.")
         else:
             print(f"No auto-response found for this trigger: {trigger_lower}")
