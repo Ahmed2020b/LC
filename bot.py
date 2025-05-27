@@ -172,19 +172,33 @@ async def on_message(message):
 @commands.has_permissions(manage_guild=True)
 async def addresponse(ctx, trigger: str, *, response: str):
     """Add an auto-response trigger."""
+    print(f"Attempting to add auto-response: trigger='{trigger}', response='{response}' for guild={ctx.guild.id}")
     try:
         global cursor, conn # Added conn to global here as well
         if cursor is None or conn is None or not conn.is_connected(): # Added conn check
+            print("Database connection not available in addresponse. Attempting to initialize...")
             if not initialize_database():
                 await ctx.send("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
+                print("Failed to initialize database in addresponse.")
                 return
+            else:
+                print("Database initialized successfully in addresponse.")
                 
+        print("Executing INSERT OR REPLACE...")
         cursor.execute('INSERT OR REPLACE INTO auto_responses (guild_id, trigger, response) VALUES (?, ?, ?)',
                       (str(ctx.guild.id), trigger.lower(), response))
+        print("INSERT OR REPLACE executed.")
+        
+        print("Attempting to commit changes...")
         conn.commit()
+        print("Changes committed.")
+        
         await ctx.send(f'تم إضافة الرد التلقائي: عندما يكتب أحد "{trigger}" سيرد البوت "{response}"')
+        print("Sent confirmation message.")
     except Exception as e:
+        print(f'حدث خطأ أثناء إضافة الرد التلقائي: {e}')
         await ctx.send(f'حدث خطأ أثناء إضافة الرد التلقائي: {e}')
+        print("Sent error message.")
 
 @bot.command()
 @commands.has_permissions(manage_guild=True)
