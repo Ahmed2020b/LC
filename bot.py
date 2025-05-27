@@ -6,6 +6,8 @@ import discord
 print("discord imported")
 from discord.ext import commands
 print("commands imported")
+from discord import app_commands
+print("app_commands imported")
 from dotenv import load_dotenv
 import sqlitecloud
 import time
@@ -60,7 +62,7 @@ def initialize_database():
         cursor.execute('SELECT 1')
         cursor.fetchone()
         
-        # Create auto-responder table if it doesn't exist (Optional, only needed if you keep using the database for other things)
+        # Create auto-responder table if it doesn't exist
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS auto_responses (
                 guild_id TEXT,
@@ -86,22 +88,24 @@ def ensure_db_connection():
     print("Database connection is active.")
     return True
 
-# Initial database connection moved to on_ready
-# if not initialize_database():
-#     print("WARNING: Failed to connect to database on startup. The bot will continue running but auto-responses won't work.")
-
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 
-bot = commands.Bot(command_prefix='-', intents=intents)
+class Bot(commands.Bot):
+    def __init__(self):
+        super().__init__(command_prefix='-', intents=intents)
+        
+    async def setup_hook(self):
+        await self.tree.sync()
+        
+    async def on_ready(self):
+        print(f'Logged in as {self.user}')
+        # Initialize database when bot starts
+        if not initialize_database():
+            print("Failed to connect to database on startup. Database functionality will not work.")
 
-@bot.event
-async def on_ready():
-    print(f'Logged in as {bot.user}')
-    # Initialize database when bot starts
-    if not initialize_database():
-        print("Failed to connect to database on startup. Database functionality will not work.")
+bot = Bot()
 
 @bot.event
 async def on_message(message):
@@ -177,69 +181,66 @@ async def on_message(message):
 
     except Exception as e:
         print(f"Error in auto-response processing: {e}")
-        # Try to reconnect on error (ensure_db_connection handles this implicitly now)
-        # time.sleep(1)  # Removed sleep to avoid blocking event loop, rely on initialize_database retry logic
-        # initialize_database() # initialize_database is called above if cursor/conn is None
 
     # IMPORTANT: This line is crucial to allow other commands to work
     await bot.process_commands(message)
     print("Processed commands.")
 
-@bot.command()
-@commands.has_permissions(manage_guild=True)
-async def addresponse(ctx, trigger: str, *, response: str):
+@bot.tree.command(name="addresponse", description="Add an auto-response trigger")
+@app_commands.checks.has_permissions(manage_guild=True)
+async def addresponse(interaction: discord.Interaction, trigger: str, response: str):
     """Add an auto-response trigger."""
-    print(f"Attempting to add auto-response: trigger='{trigger}', response='{response}' for guild={ctx.guild.id}")
+    print(f"Attempting to add auto-response: trigger='{trigger}', response='{response}' for guild={interaction.guild_id}")
     try:
         # Ensure database connection before insert
         if not ensure_db_connection():
-            await ctx.send("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
+            await interaction.response.send_message("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
             print("Failed to ensure database connection in addresponse.")
             return
                 
         print("Executing INSERT OR REPLACE...")
         cursor.execute('INSERT OR REPLACE INTO auto_responses (guild_id, trigger, response) VALUES (?, ?, ?)',
-                      (str(ctx.guild.id), trigger.lower(), response))
+                      (str(interaction.guild_id), trigger.lower(), response))
         print("INSERT OR REPLACE executed.")
         
         print("Attempting to commit changes...")
         # Ensure database connection before commit
         if not ensure_db_connection():
-            await ctx.send("فشل الاتصال بقاعدة البيانات أثناء حفظ الرد. يرجى المحاولة مرة أخرى.")
+            await interaction.response.send_message("فشل الاتصال بقاعدة البيانات أثناء حفظ الرد. يرجى المحاولة مرة أخرى.")
             print("Failed to ensure database connection before commit in addresponse.")
             return
             
         conn.commit()
         print("Changes committed.")
         
-        await ctx.send(f'تم إضافة الرد التلقائي: عندما يكتب أحد "{trigger}" سيرد البوت "{response}"')
+        await interaction.response.send_message(f'تم إضافة الرد التلقائي: عندما يكتب أحد "{trigger}" سيرد البوت "{response}"')
         print("Sent confirmation message.")
     except Exception as e:
         print(f'حدث خطأ أثناء إضافة الرد التلقائي: {e}')
-        await ctx.send(f'حدث خطأ أثناء إضافة الرد التلقائي: {e}')
+        await interaction.response.send_message(f'حدث خطأ أثناء إضافة الرد التلقائي: {e}')
         print("Sent error message.")
 
-@bot.command()
-@commands.has_permissions(manage_guild=True)
-async def removeresponse(ctx, trigger: str):
+@bot.tree.command(name="removeresponse", description="Remove an auto-response trigger")
+@app_commands.checks.has_permissions(manage_guild=True)
+async def removeresponse(interaction: discord.Interaction, trigger: str):
     """Remove an auto-response trigger."""
-    print(f"Attempting to remove auto-response: trigger='{trigger}' for guild={ctx.guild.id}")
+    print(f"Attempting to remove auto-response: trigger='{trigger}' for guild={interaction.guild_id}")
     try:
         # Ensure database connection before delete
         if not ensure_db_connection():
-            await ctx.send("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
+            await interaction.response.send_message("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
             print("Failed to ensure database connection in removeresponse.")
             return
 
         print("Executing DELETE...")
         cursor.execute('DELETE FROM auto_responses WHERE guild_id = ? AND trigger = ?',
-                      (str(ctx.guild.id), trigger.lower()))
+                      (str(interaction.guild_id), trigger.lower()))
         print("DELETE executed.")
 
         print("Attempting to commit changes...")
         # Ensure database connection before commit
         if not ensure_db_connection():
-            await ctx.send("فشل الاتصال بقاعدة البيانات أثناء حفظ التغييرات. يرجى المحاولة مرة أخرى.")
+            await interaction.response.send_message("فشل الاتصال بقاعدة البيانات أثناء حفظ التغييرات. يرجى المحاولة مرة أخرى.")
             print("Failed to ensure database connection before commit in removeresponse.")
             return
             
@@ -247,25 +248,25 @@ async def removeresponse(ctx, trigger: str):
         print("Changes committed.")
 
         if cursor.rowcount > 0:
-            await ctx.send(f'تم حذف الرد التلقائي "{trigger}"')
+            await interaction.response.send_message(f'تم حذف الرد التلقائي "{trigger}"')
             print("Sent confirmation message for removal.")
         else:
-            await ctx.send(f'لم يتم العثور على رد تلقائي بهذا المحفز "{trigger}"')
+            await interaction.response.send_message(f'لم يتم العثور على رد تلقائي بهذا المحفز "{trigger}"')
             print("Sent not found message for removal.")
     except Exception as e:
         print(f'حدث خطأ أثناء حذف الرد التلقائي: {e}')
-        await ctx.send(f'حدث خطأ أثناء حذف الرد التلقائي: {e}')
+        await interaction.response.send_message(f'حدث خطأ أثناء حذف الرد التلقائي: {e}')
         print("Sent error message for removal.")
 
-@bot.command()
-@commands.has_permissions(manage_guild=True)
-async def listresponses(ctx):
+@bot.tree.command(name="listresponses", description="List all auto-response triggers")
+@app_commands.checks.has_permissions(manage_guild=True)
+async def listresponses(interaction: discord.Interaction):
     """List all auto-response triggers."""
-    print(f"Attempting to list auto-responses for guild={ctx.guild.id} (from listresponses command)")
+    print(f"Attempting to list auto-responses for guild={interaction.guild_id} (from listresponses command)")
     try:
         # Ensure database connection before query
         if not ensure_db_connection():
-            await ctx.send("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
+            await interaction.response.send_message("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
             print("Failed to ensure database connection in listresponses.")
             return
                     
@@ -277,81 +278,80 @@ async def listresponses(ctx):
 
         print("Executing SELECT in listresponses command...")
         cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ?',
-                      (str(ctx.guild.id),))
+                      (str(interaction.guild_id),))
         responses = cursor.fetchall()
         print("Executed SELECT in listresponses command.")
 
         # Debug: Print the raw result from the listresponses command
         # print(f"listresponses command Result: {responses}") 
-        # print(f"SELECT executed in listresponses command. Result: {responses}") # Print the raw result
             
         if responses:
             response_list = '\n'.join([f'• "{trigger}" → "{response}"' for trigger, response in responses])
-            await ctx.send(f'**قائمة الردود التلقائية:**\n{response_list}')
+            await interaction.response.send_message(f'**قائمة الردود التلقائية:**\n{response_list}')
             print("Sent list of responses from listresponses command.")
         else:
-            await ctx.send('لا توجد ردود تلقائية مضافة.')
+            await interaction.response.send_message('لا توجد ردود تلقائية مضافة.')
             print("Sent message indicating no responses found from listresponses command.")
     except Exception as e:
         print(f'حدث خطأ أثناء عرض الردود التلقائية في أمر listresponses: {e}') # More specific error message
-        await ctx.send(f'حدث خطأ أثناء عرض الردود التلقائية: {e}')
+        await interaction.response.send_message(f'حدث خطأ أثناء عرض الردود التلقائية: {e}')
         print("Sent error message for listing from listresponses command.")
 
-@bot.command()
-@commands.has_permissions(kick_members=True)
-async def kick(ctx, member: discord.Member, *, reason=None):
+@bot.tree.command(name="kick", description="Kick a member from the server")
+@app_commands.checks.has_permissions(kick_members=True)
+async def kick(interaction: discord.Interaction, member: discord.Member, reason: str = None):
     """Kick a member from the server."""
     await member.kick(reason=reason)
-    await ctx.send(f'{member.mention} تم طرده بنجاح!')
+    await interaction.response.send_message(f'{member.mention} تم طرده بنجاح!')
 
-@bot.command()
-@commands.has_permissions(ban_members=True)
-async def ban(ctx, member: discord.Member, *, reason=None):
+@bot.tree.command(name="ban", description="Ban a member from the server")
+@app_commands.checks.has_permissions(ban_members=True)
+async def ban(interaction: discord.Interaction, member: discord.Member, reason: str = None):
     """Ban a member from the server."""
     await member.ban(reason=reason)
-    await ctx.send(f'{member.mention} تم حظره بنجاح!')
+    await interaction.response.send_message(f'{member.mention} تم حظره بنجاح!')
 
-@bot.command()
-@commands.has_permissions(ban_members=True)
-async def unban(ctx, *, user: str):
+@bot.tree.command(name="unban", description="Unban a user by name#discriminator")
+@app_commands.checks.has_permissions(ban_members=True)
+async def unban(interaction: discord.Interaction, user: str):
     """Unban a user by name#discriminator."""
-    banned_users = await ctx.guild.bans()
+    banned_users = await interaction.guild.bans()
     name, discriminator = user.split('#')
     for ban_entry in banned_users:
         if (ban_entry.user.name, ban_entry.user.discriminator) == (name, discriminator):
-            await ctx.guild.unban(ban_entry.user)
-            await ctx.send(f'{ban_entry.user.mention} تم فك الحظر عنه!')
+            await interaction.guild.unban(ban_entry.user)
+            await interaction.response.send_message(f'{ban_entry.user.mention} تم فك الحظر عنه!')
             return
-    await ctx.send('المستخدم غير موجود في قائمة المحظورين.')
+    await interaction.response.send_message('المستخدم غير موجود في قائمة المحظورين.')
 
-@bot.command()
-@commands.has_permissions(manage_roles=True)
-async def mute(ctx, member: discord.Member):
+@bot.tree.command(name="mute", description="Mute a member by adding a Muted role")
+@app_commands.checks.has_permissions(manage_roles=True)
+async def mute(interaction: discord.Interaction, member: discord.Member):
     """Mute a member by adding a Muted role."""
-    muted_role = discord.utils.get(ctx.guild.roles, name="Muted")
+    muted_role = discord.utils.get(interaction.guild.roles, name="Muted")
     if not muted_role:
-        muted_role = await ctx.guild.create_role(name="Muted")
-        for channel in ctx.guild.channels:
+        muted_role = await interaction.guild.create_role(name="Muted")
+        for channel in interaction.guild.channels:
             await channel.set_permissions(muted_role, speak=False, send_messages=False, read_message_history=True, read_messages=True)
     await member.add_roles(muted_role)
-    await ctx.send(f'{member.mention} تم إعطاؤه ميوت!')
+    await interaction.response.send_message(f'{member.mention} تم إعطاؤه ميوت!')
 
-@bot.command()
-@commands.has_permissions(manage_roles=True)
-async def unmute(ctx, member: discord.Member):
+@bot.tree.command(name="unmute", description="Unmute a member by removing the Muted role")
+@app_commands.checks.has_permissions(manage_roles=True)
+async def unmute(interaction: discord.Interaction, member: discord.Member):
     """Unmute a member by removing the Muted role."""
-    muted_role = discord.utils.get(ctx.guild.roles, name="Muted")
+    muted_role = discord.utils.get(interaction.guild.roles, name="Muted")
     if muted_role in member.roles:
         await member.remove_roles(muted_role)
-        await ctx.send(f'{member.mention} تم فك الميوت عنه!')
+        await interaction.response.send_message(f'{member.mention} تم فك الميوت عنه!')
     else:
-        await ctx.send('المستخدم ليس عليه ميوت.')
+        await interaction.response.send_message('المستخدم ليس عليه ميوت.')
 
-@bot.command()
-@commands.has_permissions(manage_messages=True)
-async def clear(ctx, amount: int = 5):
+@bot.tree.command(name="clear", description="Clear a number of messages")
+@app_commands.checks.has_permissions(manage_messages=True)
+async def clear(interaction: discord.Interaction, amount: int = 5):
     """Clear a number of messages (default 5)."""
-    await ctx.channel.purge(limit=amount+1)
-    await ctx.send(f'تم حذف {amount} رسالة!', delete_after=3)
+    await interaction.channel.purge(limit=amount+1)
+    await interaction.response.send_message(f'تم حذف {amount} رسالة!', delete_after=3)
 
 bot.run(os.getenv('DISCORD_TOKEN')) 
