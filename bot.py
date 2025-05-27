@@ -93,12 +93,14 @@ async def on_ready():
     if not initialize_database():
         print("Failed to connect to database on startup. Database functionality will not work.")
 
-# Removed auto-responder on_message event
 @bot.event
 async def on_message(message):
+    print(f"Message received: {message.content} from {message.author}")
     if message.author.bot:
+        print("Ignoring bot message")
         return
 
+    print("Message is not from a bot.")
     # Check for auto-responses
     try:
         global cursor, conn # Added conn to global here as well
@@ -107,19 +109,30 @@ async def on_message(message):
             if not initialize_database():
                 print("Failed to reconnect to database. Cannot process auto-response.")
                 return
-            
+            else:
+                print("Database reconnected successfully.")
+        
+        print(f"Checking database for trigger: {message.content.lower()}")
         cursor.execute('SELECT response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
                       (str(message.guild.id), message.content.lower()))
         result = cursor.fetchone()
+        
         if result:
+            print(f"Found auto-response: {result[0]}")
             await message.channel.send(result[0])
+            print("Sent auto-response.")
+        else:
+            print("No auto-response found for this trigger.")
+
     except Exception as e:
-        print(f"Error in auto-response: {e}")
+        print(f"Error in auto-response processing: {e}")
         # Try to reconnect on error
         # time.sleep(1)  # Removed sleep to avoid blocking event loop, rely on initialize_database retry logic
         # initialize_database() # initialize_database is called above if cursor/conn is None
 
+    # IMPORTANT: This line is crucial to allow other commands to work
     await bot.process_commands(message)
+    print("Processed commands.")
 
 # Removed auto-responder commands
 @bot.command()
