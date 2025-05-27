@@ -244,7 +244,7 @@ async def removeresponse(ctx, trigger: str):
 @commands.has_permissions(manage_guild=True)
 async def listresponses(ctx):
     """List all auto-response triggers."""
-    print(f"Attempting to list auto-responses for guild={ctx.guild.id}")
+    print(f"Attempting to list auto-responses for guild={ctx.guild.id} (from listresponses command)")
     try:
         # Ensure database connection before query
         if not ensure_db_connection():
@@ -252,23 +252,23 @@ async def listresponses(ctx):
             print("Failed to ensure database connection in listresponses.")
             return
                 
-        print("Executing SELECT...")
+        print("Executing SELECT in listresponses command...")
         cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ?',
                       (str(ctx.guild.id),))
         responses = cursor.fetchall()
-        print("SELECT executed.")
+        print(f"SELECT executed in listresponses command. Result: {responses}") # Print the raw result
         
         if responses:
             response_list = '\n'.join([f'• "{trigger}" → "{response}"' for trigger, response in responses])
             await ctx.send(f'**قائمة الردود التلقائية:**\n{response_list}')
-            print("Sent list of responses.")
+            print("Sent list of responses from listresponses command.")
         else:
             await ctx.send('لا توجد ردود تلقائية مضافة.')
-            print("Sent message indicating no responses found.")
+            print("Sent message indicating no responses found from listresponses command.")
     except Exception as e:
-        print(f'حدث خطأ أثناء عرض الردود التلقائية: {e}')
+        print(f'حدث خطأ أثناء عرض الردود التلقائية في أمر listresponses: {e}') # More specific error message
         await ctx.send(f'حدث خطأ أثناء عرض الردود التلقائية: {e}')
-        print("Sent error message for listing.")
+        print("Sent error message for listing from listresponses command.")
 
 @bot.command()
 @commands.has_permissions(kick_members=True)
