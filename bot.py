@@ -1,13 +1,17 @@
 import os
+print("os imported")
+
 print("Bot script started!")
 import discord
+print("discord imported")
 from discord.ext import commands
+print("commands imported")
 from dotenv import load_dotenv
-import sqlitecloud
-import time
+print("dotenv imported")
 
 # Last deployment: 2024-03-19
 load_dotenv()
+print(".env loaded")
 
 # Debug environment variables
 print("Checking environment variables...")
