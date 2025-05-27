@@ -7,16 +7,21 @@ print("discord imported")
 from discord.ext import commands
 print("commands imported")
 from dotenv import load_dotenv
+import sqlitecloud
+import time
 print("dotenv imported")
+print("sqlitecloud and time imported")
 
 # Last deployment: 2024-03-19
+
+# Load environment variables
 load_dotenv()
 print(".env loaded")
 
 # Debug environment variables
 print("Checking environment variables...")
 print(f"Current working directory: {os.getcwd()}")
-print(f"All environment variables: {dict(os.environ)}")
+# Removed printing all environment variables for brevity/security
 database_url = os.getenv('DATABASE_URL')
 print(f"DATABASE_URL exists: {database_url is not None}")
 if database_url:
@@ -42,7 +47,8 @@ def initialize_database():
         if conn is not None:
             try:
                 conn.close()
-            except:
+            except Exception as close_err:
+                print(f"Error closing existing database connection: {close_err}")
                 pass
         
         conn = sqlitecloud.connect(database_url)
@@ -69,9 +75,9 @@ def initialize_database():
         print("Please check your DATABASE_URL in Railway environment variables")
         return False
 
-# Initial database connection
-if not initialize_database():
-    print("WARNING: Failed to connect to database on startup. The bot will continue running but auto-responses won't work.")
+# Initial database connection moved to on_ready
+# if not initialize_database():
+#     print("WARNING: Failed to connect to database on startup. The bot will continue running but auto-responses won't work.")
 
 intents = discord.Intents.default()
 intents.members = True
@@ -82,9 +88,9 @@ bot = commands.Bot(command_prefix='-', intents=intents)
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
-    # Try to reconnect to database when bot starts
+    # Initialize database when bot starts
     if not initialize_database():
-        print("Failed to connect to database on startup. Please check your DATABASE_URL in Railway.")
+        print("Failed to connect to database on startup. Auto-responses and database commands will not work.")
 
 @bot.event
 async def on_message(message):
@@ -93,11 +99,11 @@ async def on_message(message):
 
     # Check for auto-responses
     try:
-        global cursor
-        if cursor is None:
-            print("Attempting to reconnect to database...")
+        global cursor, conn # Added conn to global here as well
+        if cursor is None or conn is None or not conn.is_connected(): # Added conn check
+            print("Database connection is not initialized or lost. Attempting to reconnect...")
             if not initialize_database():
-                print("Failed to reconnect to database")
+                print("Failed to reconnect to database. Cannot process auto-response.")
                 return
             
         cursor.execute('SELECT response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
@@ -108,8 +114,8 @@ async def on_message(message):
     except Exception as e:
         print(f"Error in auto-response: {e}")
         # Try to reconnect on error
-        time.sleep(1)  # Wait a bit before reconnecting
-        initialize_database()
+        # time.sleep(1)  # Removed sleep to avoid blocking event loop, rely on initialize_database retry logic
+        # initialize_database() # initialize_database is called above if cursor/conn is None
 
     await bot.process_commands(message)
 
@@ -118,8 +124,8 @@ async def on_message(message):
 async def addresponse(ctx, trigger: str, *, response: str):
     """Add an auto-response trigger."""
     try:
-        global cursor
-        if cursor is None:
+        global cursor, conn # Added conn to global here as well
+        if cursor is None or conn is None or not conn.is_connected(): # Added conn check
             if not initialize_database():
                 await ctx.send("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
                 return
@@ -136,6 +142,12 @@ async def addresponse(ctx, trigger: str, *, response: str):
 async def removeresponse(ctx, trigger: str):
     """Remove an auto-response trigger."""
     try:
+        global cursor, conn # Added conn to global here as well
+        if cursor is None or conn is None or not conn.is_connected(): # Added conn check
+            if not initialize_database():
+                await ctx.send("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
+                return
+                
         cursor.execute('DELETE FROM auto_responses WHERE guild_id = ? AND trigger = ?',
                       (str(ctx.guild.id), trigger.lower()))
         conn.commit()
@@ -151,6 +163,12 @@ async def removeresponse(ctx, trigger: str):
 async def listresponses(ctx):
     """List all auto-response triggers."""
     try:
+        global cursor, conn # Added conn to global here as well
+        if cursor is None or conn is None or not conn.is_connected(): # Added conn check
+            if not initialize_database():
+                await ctx.send("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
+                return
+                
         cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ?',
                       (str(ctx.guild.id),))
         responses = cursor.fetchall()
