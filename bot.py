@@ -120,10 +120,28 @@ async def on_message(message):
         trigger_lower = message.content.lower()
         print(f"Checking database for trigger: {trigger_lower} in guild: {current_guild_id}")
         
+        print(f"Conn ID: {id(conn)}, Cursor ID: {id(cursor)}") # Debug IDs
+
         try:
             cursor.execute('SELECT response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
                           (current_guild_id, trigger_lower))
             result = cursor.fetchone()
+            
+            # Debug: If no result found, try querying again once immediately
+            if not result:
+                print("Debug: Query returned no result, trying one more time...")
+                # Ensure connection is still active before re-querying
+                if ensure_db_connection():
+                     cursor.execute('SELECT response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
+                                   (current_guild_id, trigger_lower))
+                     result = cursor.fetchone()
+                     if result:
+                         print("Debug: Re-query successful.")
+                     else:
+                         print("Debug: Re-query also returned no result.")
+                else:
+                     print("Debug: Failed to re-ensure connection for re-query.")
+
         except Exception as db_err:
             print(f"Error executing database query: {db_err}")
             # Further debug for specific socket error if possible (library dependent)
@@ -252,6 +270,7 @@ async def listresponses(ctx):
             print("Failed to ensure database connection in listresponses.")
             return
                 
+        print(f"Conn ID: {id(conn)}, Cursor ID: {id(cursor)}") # Debug IDs
         print("Executing SELECT in listresponses command...")
         cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ?',
                       (str(ctx.guild.id),))
