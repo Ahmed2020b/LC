@@ -58,7 +58,7 @@ def initialize_database():
         cursor.execute('SELECT 1')
         cursor.fetchone()
         
-        # Create auto-responder table if it doesn't exist
+        # Create auto-responder table if it doesn't exist (Optional, only needed if you keep using the database for other things)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS auto_responses (
                 guild_id TEXT,
@@ -68,6 +68,7 @@ def initialize_database():
             )
         ''')
         conn.commit()
+        
         print("Successfully connected to the database!")
         return True
     except Exception as e:
@@ -90,8 +91,9 @@ async def on_ready():
     print(f'Logged in as {bot.user}')
     # Initialize database when bot starts
     if not initialize_database():
-        print("Failed to connect to database on startup. Auto-responses and database commands will not work.")
+        print("Failed to connect to database on startup. Database functionality will not work.")
 
+# Removed auto-responder on_message event
 @bot.event
 async def on_message(message):
     if message.author.bot:
@@ -119,6 +121,7 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
+# Removed auto-responder commands
 @bot.command()
 @commands.has_permissions(manage_guild=True)
 async def addresponse(ctx, trigger: str, *, response: str):
