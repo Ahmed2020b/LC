@@ -112,7 +112,9 @@ async def on_message(message):
             else:
                 print("Database reconnected successfully.")
         
-        print(f"Checking database for trigger: {message.content.lower()}")
+        current_guild_id = str(message.guild.id)
+        trigger_lower = message.content.lower()
+        print(f"Checking database for trigger: {trigger_lower} in guild: {current_guild_id}")
         
         # Check if connection is still valid before executing query
         if conn is None or not conn.is_connected():
@@ -125,7 +127,7 @@ async def on_message(message):
                  
         try:
             cursor.execute('SELECT response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
-                          (str(message.guild.id), message.content.lower()))
+                          (current_guild_id, trigger_lower))
             result = cursor.fetchone()
         except Exception as db_err:
             print(f"Error executing database query: {db_err}")
@@ -141,7 +143,19 @@ async def on_message(message):
             await message.channel.send(result[0])
             print("Sent auto-response.")
         else:
-            print("No auto-response found for this trigger.")
+            print(f"No auto-response found for this trigger: {trigger_lower}")
+            # Debug: List all triggers for this guild if none found
+            try:
+                cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ?', (current_guild_id,))
+                all_responses = cursor.fetchall()
+                print(f"All triggers found for guild {current_guild_id}:")
+                if all_responses:
+                    for trg, rsp in all_responses:
+                        print(f"  - Trigger: '{trg}', Response: '{rsp}'")
+                else:
+                    print("  (No auto-responses found for this guild at all)")
+            except Exception as list_err:
+                print(f"Error listing triggers for debug: {list_err}")
 
     except Exception as e:
         print(f"Error in auto-response processing: {e}")
