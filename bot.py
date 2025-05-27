@@ -113,9 +113,28 @@ async def on_message(message):
                 print("Database reconnected successfully.")
         
         print(f"Checking database for trigger: {message.content.lower()}")
-        cursor.execute('SELECT response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
-                      (str(message.guild.id), message.content.lower()))
-        result = cursor.fetchone()
+        
+        # Check if connection is still valid before executing query
+        if conn is None or not conn.is_connected():
+             print("Error: Database connection lost before executing query.")
+             if initialize_database():
+                 print("Database reconnected successfully before query.")
+             else:
+                 print("Failed to re-establish database connection before query.")
+                 return
+                 
+        try:
+            cursor.execute('SELECT response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
+                          (str(message.guild.id), message.content.lower()))
+            result = cursor.fetchone()
+        except Exception as db_err:
+            print(f"Error executing database query: {db_err}")
+            # Further debug for specific socket error if possible (library dependent)
+            if "socket" in str(db_err).lower():
+                 print("Suspected network/socket issue during database query.")
+            initialize_database() # Attempt to reconnect on query error
+            return # Stop processing this message to avoid cascading errors
+            
         
         if result:
             print(f"Found auto-response: {result[0]}")
