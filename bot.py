@@ -26,11 +26,6 @@ print(".env loaded")
 print("Checking environment variables...")
 print(f"Current working directory: {os.getcwd()}")
 # Removed printing all environment variables for brevity/security
-database_url = os.getenv('DATABASE_URL')
-print(f"DATABASE_URL exists: {database_url is not None}")
-if database_url:
-    print(f"DATABASE_URL length: {len(database_url)}")
-    print(f"DATABASE_URL starts with: {database_url[:20]}...")
 
 # Global database variables
 conn = None
@@ -39,14 +34,27 @@ cursor = None
 def initialize_database():
     global conn, cursor
     try:
-        # Validate DATABASE_URL
-        database_url = os.getenv('DATABASE_URL')
-        if not database_url:
-            print("Error: DATABASE_URL environment variable is not set")
-            print("Please make sure to set DATABASE_URL in Railway's environment variables")
+        # Get database connection details from environment variables
+        api_key = os.getenv('SQLITECLOUD_API_KEY')
+        db_name = os.getenv('SQLITECLOUD_DB')
+        host = os.getenv('SQLITECLOUD_HOST')
+        port = os.getenv('SQLITECLOUD_PORT')
+
+        # Validate environment variables
+        if not api_key:
+            print("Error: SQLITECLOUD_API_KEY environment variable is not set")
+            return False
+        if not db_name:
+            print("Error: SQLITECLOUD_DB environment variable is not set")
+            return False
+        if not host:
+            print("Error: SQLITECLOUD_HOST environment variable is not set")
+            return False
+        if not port:
+            print("Error: SQLITECLOUD_PORT environment variable is not set")
             return False
             
-        print(f"Attempting to connect to database with URL: {database_url[:20]}...")  # Print first 20 chars for security
+        print(f"Attempting to connect to database at {host}:{port} (DB: {db_name})...")
         
         if conn is not None:
             try:
@@ -62,7 +70,8 @@ def initialize_database():
         while retry_count < max_retries:
             try:
                 print(f"Attempt {retry_count + 1} to connect to database...")
-                conn = sqlitecloud.connect(database_url, timeout=30)  # 30 second timeout
+                # Connect using individual parameters
+                conn = sqlitecloud.connect(host=host, port=int(port), database=db_name, apikey=api_key, timeout=30)  # 30 second timeout
                 print("Connection object created")
                 
                 cursor = conn.cursor()
@@ -106,7 +115,7 @@ def initialize_database():
     except Exception as e:
         print(f"Error connecting to database: {str(e)}")
         print(f"Error type: {type(e).__name__}")
-        print("Please check your DATABASE_URL in Railway environment variables")
+        print("Please check your SQLiteCloud environment variables (API_KEY, DB, HOST, PORT)")
         return False
 
 def ensure_db_connection():
