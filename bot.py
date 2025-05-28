@@ -1,31 +1,30 @@
 import os
-print("os imported")
+# print("os imported")
 
 print("Bot script started!")
 import discord
-print("discord imported")
+# print("discord imported")
 from discord.ext import commands
-print("commands imported")
+# print("commands imported")
 from discord import app_commands
-print("app_commands imported")
+# print("app_commands imported")
 from dotenv import load_dotenv
 import sqlitecloud
 import time
 import asyncio # Import asyncio for sleep
-print("dotenv imported")
-print("sqlitecloud and time imported")
-print("asyncio imported")
+# print("dotenv imported")
+# print("sqlitecloud and time imported")
+# print("asyncio imported")
 
 # Last deployment: 2024-03-19
 
 # Load environment variables
 load_dotenv()
-print(".env loaded")
+# print(".env loaded")
 
 # Debug environment variables
-print("Checking environment variables...")
-print(f"Current working directory: {os.getcwd()}")
-# Removed printing all environment variables for brevity/security
+# print("Checking environment variables...")
+# print(f"Current working directory: {os.getcwd()}")
 
 # Global database variables
 conn = None
@@ -56,12 +55,12 @@ def initialize_database():
             
         # Construct the connection string
         connection_string = f"sqlitecloud://{host}:{port}/{db_name}?apikey={api_key}"
-        print(f"Attempting to connect to database with URL: {connection_string[:60]}...") # Print a portion for security
+        print(f"Attempting to connect to database...") # Simplified print
         
         if conn is not None:
             try:
                 conn.close()
-                print("Closed existing database connection")
+                # print("Closed existing database connection") # Removed print
             except Exception as close_err:
                 print(f"Error closing existing database connection: {close_err}")
                 pass
@@ -71,22 +70,22 @@ def initialize_database():
         retry_count = 0
         while retry_count < max_retries:
             try:
-                print(f"Attempt {retry_count + 1} to connect to database...")
+                # print(f"Attempt {retry_count + 1} to connect to database...") # Removed print
                 # Connect using the connection string
                 conn = sqlitecloud.connect(connection_string, timeout=30)  # 30 second timeout
-                print("Connection object created")
+                # print("Connection object created") # Removed print
                 
                 cursor = conn.cursor()
-                print("Cursor created")
+                # print("Cursor created") # Removed print
                 
                 # Test the connection with a simple query
-                print("Testing connection with SELECT 1...")
+                # print("Testing connection with SELECT 1...") # Removed print
                 cursor.execute('SELECT 1')
-                result = cursor.fetchone()
-                print(f"Test query result: {result}")
+                # result = cursor.fetchone()
+                # print(f"Test query result: {result}") # Removed print
                 
                 # Create auto-responder table if it doesn't exist
-                print("Creating auto_responses table if it doesn't exist...")
+                # print("Creating auto_responses table if it doesn't exist...") # Removed print
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS auto_responses (
                         guild_id TEXT,
@@ -95,18 +94,18 @@ def initialize_database():
                         PRIMARY KEY (guild_id, trigger)
                     )
                 ''')
-                print("Table creation query executed")
+                # print("Table creation query executed") # Removed print
                 
-                print("Attempting to commit table creation...")
+                # print("Attempting to commit table creation...") # Removed print
                 conn.commit()
-                print("Table creation committed")
+                # print("Table creation committed") # Removed print
                 
                 print("Successfully connected to the database!")
                 return True
             except Exception as e:
                 retry_count += 1
-                print(f"Attempt {retry_count} failed with error: {str(e)}")
-                print(f"Error type: {type(e).__name__}")
+                print(f"Database connection attempt failed: {str(e)}") # Simplified print
+                # print(f"Error type: {type(e).__name__}") # Kept error type for debugging
                 if retry_count < max_retries:
                     print(f"Retrying in 5 seconds... (Attempt {retry_count + 1} of {max_retries})")
                     time.sleep(5)
@@ -115,8 +114,8 @@ def initialize_database():
                     return False
                     
     except Exception as e:
-        print(f"Error connecting to database: {str(e)}")
-        print(f"Error type: {type(e).__name__}")
+        print(f"Error initializing database: {str(e)}") # Simplified print
+        # print(f"Error type: {type(e).__name__}") # Kept error type for debugging
         print("Please check your SQLiteCloud environment variables (API_KEY, DB, HOST, PORT)")
         return False
 
@@ -124,25 +123,25 @@ def ensure_db_connection():
     global conn, cursor
     try:
         if conn is None or cursor is None:
-            print("Database connection or cursor is None. Re-initializing...")
+            # print("Database connection or cursor is None. Re-initializing...") # Removed print
             return initialize_database()
             
         if not conn.is_connected():
-            print("Database connection is not active. Re-initializing...")
+            # print("Database connection is not active. Re-initializing...") # Removed print
             return initialize_database()
             
         # Test the connection
-        print("Testing existing database connection...")
+        # print("Testing existing database connection...") # Removed print
         cursor.execute('SELECT 1')
-        result = cursor.fetchone()
-        print(f"Connection test result: {result}")
+        # result = cursor.fetchone()
+        # print(f"Connection test result: {result}") # Removed print
         
-        print("Database connection is active and working.")
+        # print("Database connection is active and working.") # Removed print
         return True
     except Exception as e:
-        print(f"Error in ensure_db_connection: {str(e)}")
-        print(f"Error type: {type(e).__name__}")
-        print("Attempting to re-initialize database connection...")
+        print(f"Error in ensure_db_connection: {str(e)}") # Simplified print
+        # print(f"Error type: {type(e).__name__}") # Kept error type for debugging
+        # print("Attempting to re-initialize database connection...") # Removed print
         return initialize_database()
 
 intents = discord.Intents.default()
@@ -151,10 +150,11 @@ intents.message_content = True
 
 class Bot(commands.Bot):
     def __init__(self):
-        super().__init__(command_prefix='-', intents=intents)
+        super().__init__(command_prefix='-', intents=intents) # Prefix is not used for slash commands, but required for Bot class
         
     async def setup_hook(self):
         await self.tree.sync()
+        print("Slash commands synced.") # Added confirmation print
         
     async def on_ready(self):
         print(f'Logged in as {self.user}')
@@ -166,196 +166,218 @@ bot = Bot()
 
 @bot.event
 async def on_message(message):
-    print(f"Message received: {message.content} from {message.author}")
+    # print(f"Message received: {message.content} from {message.author}") # Removed detailed print
     if message.author.bot:
-        print("Ignoring bot message")
+        # print("Ignoring bot message") # Removed print
         return
 
-    print("Message is not from a bot.")
+    # print("Message is not from a bot.") # Removed print
     # Check for auto-responses
     try:
         # Ensure database connection before query
+        # print("Checking database connection...") # Removed print
         if not ensure_db_connection():
-            print("Failed to ensure database connection before on_message query.")
+            # print("Database connection check failed") # Removed print
             return
             
-        print(f"Conn ID: {id(conn)}, Cursor ID: {id(cursor)}") # Debug IDs
+        # print("Database connection verified, preparing to query...") # Removed print
+        # print(f"Conn ID: {id(conn)}, Cursor ID: {id(cursor)}") # Removed Debug IDs
         
         # Add a small delay before querying as a debugging step
-        await asyncio.sleep(0.1)
-        print("Delayed before query.")
+        # await asyncio.sleep(0.1) # Removed sleep unless necessary for specific db issues
+        # print("Delayed before query.") # Removed print
 
         current_guild_id = str(message.guild.id)
         trigger_lower = message.content.lower()
-        print(f"Checking database for trigger: {trigger_lower} in guild: {current_guild_id}")
+        # print(f"Checking database for trigger: {trigger_lower} in guild: {current_guild_id}") # Removed detailed print
         
         cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
                       (current_guild_id, trigger_lower))
         result = cursor.fetchone()
         
-        # Debug: If no result found, try querying again once immediately
+        # Debug: If no result found, try querying again once immediately (simplified debug)
         if not result:
-            print("Debug: Query returned no result, trying one more time...")
+            # print("Debug: Query returned no result, trying one more time...") # Removed print
             # Ensure connection is still active before re-querying
             if ensure_db_connection():
                  cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
                                (current_guild_id, trigger_lower))
                  result = cursor.fetchone()
-                 if result:
-                     print("Debug: Re-query successful.")
-                 else:
-                     print("Debug: Re-query also returned no result.")
-            else:
-                 print("Debug: Failed to re-ensure connection for re-query.")
+                 # if result:
+                     # print("Debug: Re-query successful.") # Removed print
+                 # else:
+                     # print("Debug: Re-query also returned no result.") # Removed print
+            # else:
+                 # print("Debug: Failed to re-ensure connection for re-query.") # Removed print
 
         if result:
-            print(f"Found auto-response: trigger='{result[0]}', response='{result[1]}'")
+            # print(f"Found auto-response: trigger='{result[0]}', response='{result[1]}'") # Removed detailed print
             await message.channel.send(result[1])
-            print("Sent auto-response.")
-        else:
-            print(f"No auto-response found for this trigger: {trigger_lower}")
-            # Debug: List all triggers for this guild if none found
-            try:
+            # print("Sent auto-response.") # Removed print
+        # else:
+            # print(f"No auto-response found for this trigger: {trigger_lower}") # Removed print
+            # Debug: List all triggers for this guild if none found (simplified debug)
+            # try:
                 # Ensure database connection before debug query
-                if not ensure_db_connection():
-                    print("Failed to ensure database connection before debug listing.")
+                # if not ensure_db_connection():
+                    # print("Failed to ensure database connection before debug listing.")
                     # Continue without listing if connection fails
-                else:
-                    print("Debug: Executing SELECT for all triggers...")
+                # else:
+                    # print("Debug: Executing SELECT for all triggers...")
                     # Add a small delay before debug query
-                    await asyncio.sleep(0.1)
-                    print("Debug: Delayed before debug query.")
-                    cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ?', (current_guild_id,))
-                    all_responses = cursor.fetchall()
-                    print(f"All triggers found for guild {current_guild_id}:")
-                    if all_responses:
-                        for trg, rsp in all_responses:
-                            print(f"  - Trigger: '{trg}', Response: '{rsp}'")
-                    else:
-                        print("  (No auto-responses found for this guild at all)")
-            except Exception as list_err:
-                print(f"Error listing triggers for debug: {list_err}")
+                    # await asyncio.sleep(0.1)
+                    # print("Debug: Delayed before debug query.")
+                    # cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ?', (current_guild_id,))
+                    # all_responses = cursor.fetchall()
+                    # print(f"All triggers found for guild {current_guild_id}:")
+                    # if all_responses:
+                        # for trg, rsp in all_responses:
+                            # print(f"  - Trigger: '{trg}', Response: '{rsp}'")
+                    # else:
+                        # print("  (No auto-responses found for this guild at all)")
+            # except Exception as list_err:
+                # print(f"Error listing triggers for debug: {list_err}")
 
     except Exception as e:
         print(f"Error in auto-response processing: {e}")
+        # print(f"Error type: {type(e).__name__}") # Kept error type for debugging
+
 
     # IMPORTANT: This line is crucial to allow other commands to work
     await bot.process_commands(message)
-    print("Processed commands.")
+    # print("Processed commands.") # Removed print
 
 @bot.tree.command(name="addresponse", description="Add an auto-response trigger")
 @app_commands.checks.has_permissions(manage_guild=True)
 async def addresponse(interaction: discord.Interaction, trigger: str, response: str):
     """Add an auto-response trigger."""
-    print(f"Attempting to add auto-response: trigger='{trigger}', response='{response}' for guild={interaction.guild_id}")
+    # print(f"Attempting to add auto-response: trigger='{trigger}', response='{response}' for guild={interaction.guild_id}") # Removed detailed print
     try:
         # Ensure database connection before insert
-        print("Checking database connection...")
+        # print("Checking database connection...") # Removed print
         if not ensure_db_connection():
-            print("Database connection check failed")
+            # print("Database connection check failed") # Removed print
             await interaction.response.send_message("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
             return
                 
-        print("Database connection verified, preparing to insert...")
+        # print("Database connection verified, preparing to insert...") # Removed print
         try:
-            print(f"Executing INSERT OR REPLACE with values: guild_id={str(interaction.guild_id)}, trigger={trigger.lower()}, response={response}")
+            # print(f"Executing INSERT OR REPLACE with values: guild_id={str(interaction.guild_id)}, trigger={trigger.lower()}, response={response}") # Removed detailed print
             cursor.execute('INSERT OR REPLACE INTO auto_responses (guild_id, trigger, response) VALUES (?, ?, ?)',
                           (str(interaction.guild_id), trigger.lower(), response))
-            print("INSERT OR REPLACE executed successfully")
+            # print("INSERT OR REPLACE executed successfully") # Removed print
         except Exception as db_error:
-            print(f"Database error during insert: {db_error}")
-            print(f"Error type: {type(db_error).__name__}")
+            print(f"Database insert error: {db_error}") # Simplified print
+            # print(f"Error type: {type(db_error).__name__}") # Kept error type for debugging
             await interaction.response.send_message("حدث خطأ أثناء حفظ الرد في قاعدة البيانات. يرجى المحاولة مرة أخرى.")
             return
         
-        print("Attempting to commit changes...")
+        # print("Attempting to commit changes...") # Removed print
         try:
             # Ensure database connection before commit
-            print("Verifying database connection before commit...")
+            # print("Verifying database connection before commit...") # Removed print
             if not ensure_db_connection():
-                print("Database connection verification failed before commit")
+                # print("Database connection verification failed before commit") # Removed print
                 await interaction.response.send_message("فشل الاتصال بقاعدة البيانات أثناء حفظ الرد. يرجى المحاولة مرة أخرى.")
                 return
                 
-            print("Executing commit...")
+            # print("Executing commit...") # Removed print
             conn.commit()
-            print("Changes committed successfully")
+            # print("Changes committed successfully") # Removed print
         except Exception as commit_error:
-            print(f"Error during commit: {commit_error}")
-            print(f"Error type: {type(commit_error).__name__}")
+            print(f"Database commit error: {commit_error}") # Simplified print
+            # print(f"Error type: {type(commit_error).__name__}") # Kept error type for debugging
             await interaction.response.send_message("حدث خطأ أثناء حفظ التغييرات. يرجى المحاولة مرة أخرى.")
             return
         
-        print("Sending success message to user...")
+        # print("Sending success message to user...") # Removed print
         await interaction.response.send_message(f'تم إضافة الرد التلقائي: عندما يكتب أحد "{trigger}" سيرد البوت "{response}"')
-        print("Success message sent")
+        # print("Success message sent") # Removed print
     except Exception as e:
         print(f'حدث خطأ أثناء إضافة الرد التلقائي: {e}')
-        print(f"Error type: {type(e).__name__}")
+        # print(f"Error type: {type(e).__name__}") # Kept error type for debugging
         await interaction.response.send_message(f'حدث خطأ أثناء إضافة الرد التلقائي: {e}')
-        print("Error message sent to user")
+        # print("Error message sent to user") # Removed print
 
 @bot.tree.command(name="removeresponse", description="Remove an auto-response trigger")
 @app_commands.checks.has_permissions(manage_guild=True)
 async def removeresponse(interaction: discord.Interaction, trigger: str):
     """Remove an auto-response trigger."""
-    print(f"Attempting to remove auto-response: trigger='{trigger}' for guild={interaction.guild_id}")
+    # print(f"Attempting to remove auto-response: trigger='{trigger}' for guild={interaction.guild_id}") # Removed detailed print
     try:
         # Ensure database connection before delete
+        # print("Checking database connection...") # Removed print
         if not ensure_db_connection():
+            # print("Database connection check failed") # Removed print
             await interaction.response.send_message("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
-            print("Failed to ensure database connection in removeresponse.")
             return
 
-        print("Executing DELETE...")
-        cursor.execute('DELETE FROM auto_responses WHERE guild_id = ? AND trigger = ?',
-                      (str(interaction.guild_id), trigger.lower()))
-        print("DELETE executed.")
-
-        print("Attempting to commit changes...")
-        # Ensure database connection before commit
-        if not ensure_db_connection():
-            await interaction.response.send_message("فشل الاتصال بقاعدة البيانات أثناء حفظ التغييرات. يرجى المحاولة مرة أخرى.")
-            print("Failed to ensure database connection before commit in removeresponse.")
+        # print("Database connection verified, preparing to delete...") # Removed print
+        try:
+            # print("Executing DELETE...") # Removed print
+            cursor.execute('DELETE FROM auto_responses WHERE guild_id = ? AND trigger = ?',
+                          (str(interaction.guild_id), trigger.lower()))
+            # print("DELETE executed.") # Removed print
+        except Exception as db_error:
+            print(f"Database delete error: {db_error}") # Simplified print
+            # print(f"Error type: {type(db_error).__name__}") # Kept error type for debugging
+            await interaction.response.send_message("حدث خطأ أثناء حذف الرد من قاعدة البيانات. يرجى المحاولة مرة أخرى.")
             return
-            
-        conn.commit()
-        print("Changes committed.")
+
+        # print("Attempting to commit changes...") # Removed print
+        try:
+            # Ensure database connection before commit
+            # print("Verifying database connection before commit...") # Removed print
+            if not ensure_db_connection():
+                # print("Database connection verification failed before commit") # Removed print
+                await interaction.response.send_message("فشل الاتصال بقاعدة البيانات أثناء حفظ التغييرات. يرجى المحاولة مرة أخرى.")
+                return
+                
+            # print("Executing commit...") # Removed print
+            conn.commit()
+            # print("Changes committed.") # Removed print
+        except Exception as commit_error:
+            print(f"Database commit error: {commit_error}") # Simplified print
+            # print(f"Error type: {type(commit_error).__name__}") # Kept error type for debugging
+            await interaction.response.send_message("حدث خطأ أثناء حفظ التغييرات. يرجى المحاولة مرة أخرى.")
+            return
 
         if cursor.rowcount > 0:
             await interaction.response.send_message(f'تم حذف الرد التلقائي "{trigger}"')
-            print("Sent confirmation message for removal.")
+            # print("Sent confirmation message for removal.") # Removed print
         else:
             await interaction.response.send_message(f'لم يتم العثور على رد تلقائي بهذا المحفز "{trigger}"')
-            print("Sent not found message for removal.")
+            # print("Sent not found message for removal.") # Removed print
     except Exception as e:
         print(f'حدث خطأ أثناء حذف الرد التلقائي: {e}')
+        # print(f"Error type: {type(e).__name__}") # Kept error type for debugging
         await interaction.response.send_message(f'حدث خطأ أثناء حذف الرد التلقائي: {e}')
-        print("Sent error message for removal.")
+        # print("Sent error message for removal.") # Removed print
 
 @bot.tree.command(name="listresponses", description="List all auto-response triggers")
 @app_commands.checks.has_permissions(manage_guild=True)
 async def listresponses(interaction: discord.Interaction):
     """List all auto-response triggers."""
-    print(f"Attempting to list auto-responses for guild={interaction.guild_id} (from listresponses command)")
+    # print(f"Attempting to list auto-responses for guild={interaction.guild_id} (from listresponses command)") # Removed detailed print
     try:
         # Ensure database connection before query
+        # print("Checking database connection...") # Removed print
         if not ensure_db_connection():
+            # print("Database connection check failed") # Removed print
             await interaction.response.send_message("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
-            print("Failed to ensure database connection in listresponses.")
             return
                     
-        print(f"Conn ID: {id(conn)}, Cursor ID: {id(cursor)}") # Debug IDs
+        # print(f"Conn ID: {id(conn)}, Cursor ID: {id(cursor)}") # Removed Debug IDs
         
         # Add a small delay before querying as a debugging step
-        await asyncio.sleep(0.1)
-        print("Delayed before query in listresponses.")
+        # await asyncio.sleep(0.1) # Removed sleep
+        # print("Delayed before query in listresponses.") # Removed print
 
-        print("Executing SELECT in listresponses command...")
+        # print("Executing SELECT in listresponses command...") # Removed print
         cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ?',
                       (str(interaction.guild_id),))
         responses = cursor.fetchall()
-        print("Executed SELECT in listresponses command.")
+        # print("Executed SELECT in listresponses command.") # Removed print
 
         # Debug: Print the raw result from the listresponses command
         # print(f"listresponses command Result: {responses}") 
@@ -363,14 +385,15 @@ async def listresponses(interaction: discord.Interaction):
         if responses:
             response_list = '\n'.join([f'• "{trigger}" → "{response}"' for trigger, response in responses])
             await interaction.response.send_message(f'**قائمة الردود التلقائية:**\n{response_list}')
-            print("Sent list of responses from listresponses command.")
+            # print("Sent list of responses from listresponses command.") # Removed print
         else:
             await interaction.response.send_message('لا توجد ردود تلقائية مضافة.')
-            print("Sent message indicating no responses found from listresponses command.")
+            # print("Sent message indicating no responses found from listresponses command.") # Removed print
     except Exception as e:
-        print(f'حدث خطأ أثناء عرض الردود التلقائية في أمر listresponses: {e}') # More specific error message
+        print(f'حدث خطأ أثناء عرض الردود التلقائية: {e}') # Simplified print
+        # print(f"Error type: {type(e).__name__}") # Kept error type for debugging
         await interaction.response.send_message(f'حدث خطأ أثناء عرض الردود التلقائية: {e}')
-        print("Sent error message for listing from listresponses command.")
+        # print("Sent error message for listing from listresponses command.") # Removed print
 
 @bot.tree.command(name="kick", description="Kick a member from the server")
 @app_commands.checks.has_permissions(kick_members=True)
