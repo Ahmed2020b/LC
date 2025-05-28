@@ -72,7 +72,7 @@ def initialize_database():
             try:
                 # print(f"Attempt {retry_count + 1} to connect to database...") # Removed print
                 # Connect using the connection string
-                conn = sqlitecloud.connect(connection_string, timeout=30)  # 30 second timeout
+                conn = sqlitecloud.connect(connection_string)
                 # print("Connection object created") # Removed print
                 
                 cursor = conn.cursor()
