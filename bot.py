@@ -191,24 +191,34 @@ async def on_message(message):
         trigger_lower = message.content.lower()
         print(f"Checking database for trigger: {trigger_lower} in guild: {current_guild_id}") # Added back print
         
+        # Add logging to check connection/cursor state
+        print(f"Connection object is None: {conn is None}")
+        print(f"Cursor object is None: {cursor is None}")
+        if conn is not None:
+            try:
+                print(f"Connection is connected: {conn.is_connected()}")
+            except Exception as conn_check_err:
+                print(f"Error checking connection status: {conn_check_err}")
+
         cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
                       (current_guild_id, trigger_lower))
         result = cursor.fetchone()
         
         # Debug: If no result found, try querying again once immediately (simplified debug)
-        if not result:
-            print("Debug: Query returned no result, trying one more time...") # Added back print
-            # Ensure connection is still active before re-querying
-            if ensure_db_connection():
-                 cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
-                               (current_guild_id, trigger_lower))
-                 result = cursor.fetchone()
-                 if result:
-                     print("Debug: Re-query successful.") # Added back print
-                 else:
-                     print("Debug: Re-query also returned no result.") # Added back print
-            # else:
-                 # print("Debug: Failed to re-ensure connection for re-query.") # Removed print
+        # Removed immediate re-query logic
+        # if not result:
+        #     print("Debug: Query returned no result, trying one more time...") # Added back print
+        #     # Ensure connection is still active before re-querying
+        #     if ensure_db_connection():
+        #          cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
+        #                        (current_guild_id, trigger_lower))
+        #          result = cursor.fetchone()
+        #          if result:
+        #              print("Debug: Re-query successful.") # Added back print
+        #          else:
+        #              print("Debug: Re-query also returned no result.") # Added back print
+        #     # else:
+        #          # print("Debug: Failed to re-ensure connection for re-query.") # Removed print
 
         if result:
             # print(f"Found auto-response: trigger='{result[0]}', response='{result[1]}'") # Removed detailed print
