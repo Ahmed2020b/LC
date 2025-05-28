@@ -189,7 +189,7 @@ async def on_message(message):
 
         current_guild_id = str(message.guild.id)
         trigger_lower = message.content.lower()
-        # print(f"Checking database for trigger: {trigger_lower} in guild: {current_guild_id}") # Removed detailed print
+        print(f"Checking database for trigger: {trigger_lower} in guild: {current_guild_id}") # Added back print
         
         cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
                       (current_guild_id, trigger_lower))
@@ -197,16 +197,16 @@ async def on_message(message):
         
         # Debug: If no result found, try querying again once immediately (simplified debug)
         if not result:
-            # print("Debug: Query returned no result, trying one more time...") # Removed print
+            print("Debug: Query returned no result, trying one more time...") # Added back print
             # Ensure connection is still active before re-querying
             if ensure_db_connection():
                  cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
                                (current_guild_id, trigger_lower))
                  result = cursor.fetchone()
-                 # if result:
-                     # print("Debug: Re-query successful.") # Removed print
-                 # else:
-                     # print("Debug: Re-query also returned no result.") # Removed print
+                 if result:
+                     print("Debug: Re-query successful.") # Added back print
+                 else:
+                     print("Debug: Re-query also returned no result.") # Added back print
             # else:
                  # print("Debug: Failed to re-ensure connection for re-query.") # Removed print
 
@@ -214,8 +214,8 @@ async def on_message(message):
             # print(f"Found auto-response: trigger='{result[0]}', response='{result[1]}'") # Removed detailed print
             await message.reply(result[1])
             # print("Sent auto-response.") # Removed print
-        # else:
-            # print(f"No auto-response found for this trigger: {trigger_lower}") # Removed print
+        else:
+            print(f"No auto-response found for this trigger: {trigger_lower}") # Added back print
             # Debug: List all triggers for this guild if none found (simplified debug)
             # try:
                 # Ensure database connection before debug query
