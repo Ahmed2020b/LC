@@ -54,7 +54,9 @@ def initialize_database():
             print("Error: SQLITECLOUD_PORT environment variable is not set")
             return False
             
-        print(f"Attempting to connect to database at {host}:{port} (DB: {db_name})...")
+        # Construct the connection string
+        connection_string = f"sqlitecloud://{host}:{port}/{db_name}?apikey={api_key}"
+        print(f"Attempting to connect to database with URL: {connection_string[:60]}...") # Print a portion for security
         
         if conn is not None:
             try:
@@ -70,8 +72,8 @@ def initialize_database():
         while retry_count < max_retries:
             try:
                 print(f"Attempt {retry_count + 1} to connect to database...")
-                # Connect using individual parameters
-                conn = sqlitecloud.connect(host=host, port=int(port), database=db_name, apikey=api_key, timeout=30)  # 30 second timeout
+                # Connect using the connection string
+                conn = sqlitecloud.connect(connection_string, timeout=30)  # 30 second timeout
                 print("Connection object created")
                 
                 cursor = conn.cursor()
