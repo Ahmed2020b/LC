@@ -55,26 +55,41 @@ def initialize_database():
                 print(f"Error closing existing database connection: {close_err}")
                 pass
         
-        conn = sqlitecloud.connect(database_url)
-        cursor = conn.cursor()
-        
-        # Test the connection
-        cursor.execute('SELECT 1')
-        cursor.fetchone()
-        
-        # Create auto-responder table if it doesn't exist
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS auto_responses (
-                guild_id TEXT,
-                trigger TEXT,
-                response TEXT,
-                PRIMARY KEY (guild_id, trigger)
-            )
-        ''')
-        conn.commit()
-        
-        print("Successfully connected to the database!")
-        return True
+        # Add connection timeout and retry logic
+        max_retries = 3
+        retry_count = 0
+        while retry_count < max_retries:
+            try:
+                conn = sqlitecloud.connect(database_url, timeout=30)  # 30 second timeout
+                cursor = conn.cursor()
+                
+                # Test the connection with a simple query
+                cursor.execute('SELECT 1')
+                cursor.fetchone()
+                
+                # Create auto-responder table if it doesn't exist
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS auto_responses (
+                        guild_id TEXT,
+                        trigger TEXT,
+                        response TEXT,
+                        PRIMARY KEY (guild_id, trigger)
+                    )
+                ''')
+                conn.commit()
+                
+                print("Successfully connected to the database!")
+                return True
+            except Exception as e:
+                retry_count += 1
+                print(f"Attempt {retry_count} failed: {str(e)}")
+                if retry_count < max_retries:
+                    print(f"Retrying in 5 seconds... (Attempt {retry_count + 1} of {max_retries})")
+                    time.sleep(5)
+                else:
+                    print("Max retries reached. Could not connect to database.")
+                    return False
+                    
     except Exception as e:
         print(f"Error connecting to database: {str(e)}")
         print("Please check your DATABASE_URL in Railway environment variables")
@@ -199,19 +214,29 @@ async def addresponse(interaction: discord.Interaction, trigger: str, response: 
             return
                 
         print("Executing INSERT OR REPLACE...")
-        cursor.execute('INSERT OR REPLACE INTO auto_responses (guild_id, trigger, response) VALUES (?, ?, ?)',
-                      (str(interaction.guild_id), trigger.lower(), response))
-        print("INSERT OR REPLACE executed.")
+        try:
+            cursor.execute('INSERT OR REPLACE INTO auto_responses (guild_id, trigger, response) VALUES (?, ?, ?)',
+                          (str(interaction.guild_id), trigger.lower(), response))
+            print("INSERT OR REPLACE executed.")
+        except Exception as db_error:
+            print(f"Database error during insert: {db_error}")
+            await interaction.response.send_message("حدث خطأ أثناء حفظ الرد في قاعدة البيانات. يرجى المحاولة مرة أخرى.")
+            return
         
         print("Attempting to commit changes...")
-        # Ensure database connection before commit
-        if not ensure_db_connection():
-            await interaction.response.send_message("فشل الاتصال بقاعدة البيانات أثناء حفظ الرد. يرجى المحاولة مرة أخرى.")
-            print("Failed to ensure database connection before commit in addresponse.")
+        try:
+            # Ensure database connection before commit
+            if not ensure_db_connection():
+                await interaction.response.send_message("فشل الاتصال بقاعدة البيانات أثناء حفظ الرد. يرجى المحاولة مرة أخرى.")
+                print("Failed to ensure database connection before commit in addresponse.")
+                return
+                
+            conn.commit()
+            print("Changes committed.")
+        except Exception as commit_error:
+            print(f"Error during commit: {commit_error}")
+            await interaction.response.send_message("حدث خطأ أثناء حفظ التغييرات. يرجى المحاولة مرة أخرى.")
             return
-            
-        conn.commit()
-        print("Changes committed.")
         
         await interaction.response.send_message(f'تم إضافة الرد التلقائي: عندما يكتب أحد "{trigger}" سيرد البوت "{response}"')
         print("Sent confirmation message.")
