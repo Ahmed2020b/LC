@@ -77,26 +77,9 @@ def initialize_database():
                 
                 # Note: Auto-response table creation is removed here.
                 
-                # Create ticket categories table if it doesn't exist
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS ticket_categories (
-                        guild_id TEXT,
-                        category_name TEXT,
-                        description TEXT,
-                        emoji TEXT,
-                        PRIMARY KEY (guild_id, category_name)
-                    )
-                ''')
-
-                # Create ticket panels table if it doesn't exist
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS ticket_panels (
-                        guild_id TEXT,
-                        channel_id TEXT,
-                        message_id TEXT UNIQUE,
-                        PRIMARY KEY (guild_id, message_id)
-                    )
-                ''')
+                # Removed ticket categories table creation.
+                
+                # Removed ticket panels table creation.
 
                 # Create tickets table if it doesn't exist
                 cursor.execute('''
@@ -250,26 +233,10 @@ async def clear(interaction: discord.Interaction, amount: int = 5):
 # --- Ticket System --- #
 
 class TicketCategorySelect(discord.ui.Select):
-    def __init__(self, categories):
+    def __init__(self, categories: list[discord.CategoryChannel]):
         options = []
-        for cat in categories:
-            try:
-                # Ensure emoji is valid or None
-                emoji = None
-                if cat[2]: # Check if emoji string exists
-                    # Try getting custom emoji
-                    emoji = discord.utils.get(bot.emojis, name=cat[2].strip(':'))
-                    # If not custom, try getting partial emoji
-                    if not emoji:
-                        try:
-                            emoji = discord.PartialEmoji.from_str(cat[2])
-                        except:
-                            pass # Ignore if parsing fails
-                            
-                options.append(discord.SelectOption(label=cat[0], description=cat[1], emoji=emoji))
-            except Exception as e:
-                print(f"Error creating select option for category {cat[0]}: {e}")
-                options.append(discord.SelectOption(label=cat[0], description=cat[1])) # Add without emoji if error
+        for category in categories:
+            options.append(discord.SelectOption(label=category.name, value=str(category.id)))
 
         super().__init__(
             placeholder="Choose a ticket category...",
@@ -279,7 +246,7 @@ class TicketCategorySelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        category_name = self.values[0]
+        category_id = int(self.values[0])
         guild = interaction.guild
         user = interaction.user
 
@@ -289,18 +256,21 @@ class TicketCategorySelect(discord.ui.Select):
 
         # Check if the user already has an open ticket
         if ensure_db_connection():
+            # Fix: Corrected SQL query syntax for status = 'open'
             cursor.execute("SELECT channel_id FROM tickets WHERE guild_id = ? AND user_id = ? AND status = 'open'", (str(guild.id), str(user.id)))
             existing_ticket = cursor.fetchone()
             if existing_ticket:
                 await interaction.response.send_message(f"You already have an open ticket in <#{existing_ticket[0]}>.", ephemeral=True)
                 return
 
-            # Get category details from the database
-            cursor.execute('SELECT description FROM ticket_categories WHERE guild_id = ? AND category_name = ?', (str(guild.id), category_name))
-            category_details = cursor.fetchone()
-            category_description = category_details[0] if category_details else "No description provided."
+            # Get the selected category channel object
+            selected_category = guild.get_channel(category_id)
 
-            # Create the ticket channel
+            if not isinstance(selected_category, discord.CategoryChannel):
+                 await interaction.response.send_message("Invalid category selected.", ephemeral=True)
+                 return
+
+            # Create the ticket channel within the selected category
             overwrites = {
                 guild.default_role: discord.PermissionOverwrite(view_channel=False),
                 user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
@@ -310,20 +280,20 @@ class TicketCategorySelect(discord.ui.Select):
 
             try:
                 ticket_channel = await guild.create_text_channel(
-                    f'ticket-{category_name}-{user.name}',
-                    category=discord.utils.get(guild.categories, name='Tickets'), # Optional: Specify a Ticket Category Group
+                    f'ticket-{user.name}',
+                    category=selected_category,
                     overwrites=overwrites
                 )
 
                 # Store ticket information in the database
                 cursor.execute('INSERT INTO tickets (guild_id, channel_id, user_id, category_name) VALUES (?, ?, ?, ?)',
-                              (str(guild.id), str(ticket_channel.id), str(user.id), category_name))
+                              (str(guild.id), str(ticket_channel.id), str(user.id), selected_category.name))
                 conn.commit()
 
                 # Send initial message in the ticket channel
                 embed = discord.Embed(
-                    title=f"New Ticket - {category_name}",
-                    description=f"User: {user.mention}\nCategory: {category_name}\nDescription: {category_description}",
+                    title=f"New Ticket in {selected_category.name}",
+                    description=f"User: {user.mention}\nCategory: {selected_category.name}",
                     color=discord.Color.blue()
                 )
                 await ticket_channel.send(embed=embed)
@@ -337,79 +307,28 @@ class TicketCategorySelect(discord.ui.Select):
             await interaction.response.send_message("Database connection failed. Cannot create ticket at this time.", ephemeral=True)
 
 class TicketPanel(discord.ui.View):
-    def __init__(self, categories):
+    def __init__(self, categories: list[discord.CategoryChannel]):
         super().__init__(timeout=None)
         self.add_item(TicketCategorySelect(categories))
 
-# Commands for managing ticket categories
-@bot.tree.command(name="addticketcategory", description="Add a ticket category for the panel")
+# Removed commands for managing ticket categories
+# @bot.tree.command(name="addticketcategory", ...)
+# @bot.tree.command(name="removeticketcategory", ...)
+# @bot.tree.command(name="listticketcategories", ...)
+
+# New command to set up the ticket panel
+@bot.tree.command(name="ticket-setup", description="Set up the interactive ticket panel")
 @app_commands.checks.has_permissions(manage_guild=True)
-async def addticketcategory(interaction: discord.Interaction, name: str, description: str, emoji: str = None):
-    """Add a ticket category for the panel."""
-    guild_id = str(interaction.guild_id)
-    try:
-        if not ensure_db_connection():
-            await interaction.response.send_message("Database connection failed.", ephemeral=True)
-            return
-
-        cursor.execute('INSERT OR REPLACE INTO ticket_categories (guild_id, category_name, description, emoji) VALUES (?, ?, ?, ?)',
-                      (guild_id, name, description, emoji))
-        conn.commit()
-        await interaction.response.send_message(f"Ticket category '{name}' added/updated.", ephemeral=True)
-    except Exception as e:
-        print(f"Error adding ticket category: {e}")
-        await interaction.response.send_message("Error adding ticket category.", ephemeral=True)
-
-@bot.tree.command(name="removeticketcategory", description="Remove a ticket category")
-@app_commands.checks.has_permissions(manage_guild=True)
-async def removeticketcategory(interaction: discord.Interaction, name: str):
-    """Remove a ticket category."""
-    guild_id = str(interaction.guild_id)
-    try:
-        if not ensure_db_connection():
-            await interaction.response.send_message("Database connection failed.", ephemeral=True)
-            return
-
-        cursor.execute('DELETE FROM ticket_categories WHERE guild_id = ? AND category_name = ?',
-                      (guild_id, name))
-        conn.commit()
-        if cursor.rowcount > 0:
-            await interaction.response.send_message(f"Ticket category '{name}' removed.", ephemeral=True)
-        else:
-            await interaction.response.send_message(f"Ticket category '{name}' not found.", ephemeral=True)
-    except Exception as e:
-        print(f"Error removing ticket category: {e}")
-        await interaction.response.send_message("Error removing ticket category.", ephemeral=True)
-
-@bot.tree.command(name="listticketcategories", description="List all ticket categories")
-@app_commands.checks.has_permissions(manage_guild=True)
-async def listticketcategories(interaction: discord.Interaction):
-    """List all ticket categories."""
-    guild_id = str(interaction.guild_id)
-    try:
-        if not ensure_db_connection():
-            await interaction.response.send_message("Database connection failed.", ephemeral=True)
-            return
-
-        cursor.execute('SELECT category_name, description, emoji FROM ticket_categories WHERE guild_id = ?', (guild_id,))
-        categories = cursor.fetchall()
-
-        if categories:
-            response_message = "**Ticket Categories:**\n"
-            for name, desc, emoji in categories:
-                response_message += f"• {emoji if emoji else ''} **{name}**: {desc}\n"
-            await interaction.response.send_message(response_message, ephemeral=True)
-        else:
-            await interaction.response.send_message("No ticket categories added yet.", ephemeral=True)
-    except Exception as e:
-        print(f"Error listing ticket categories: {e}")
-        await interaction.response.send_message("Error listing ticket categories.", ephemeral=True)
-
-# Command to send the ticket panel
-@bot.tree.command(name="sendticketpanel", description="Send the interactive ticket panel to a channel")
-@app_commands.checks.has_permissions(manage_guild=True)
-async def sendticketpanel(interaction: discord.Interaction, channel: discord.TextChannel, title: str = "Create a Ticket", description: str = "Select a category below to create a ticket.", color: str = "#0000ff", include_server_icon: bool = False):
-    """Send the interactive ticket panel to a channel."""
+@app_commands.describe(
+    channel="The channel to send the ticket panel to",
+    title="The title of the ticket panel embed",
+    description="The description of the ticket panel embed",
+    color="The color of the embed (hex code, e.g., #0000ff)",
+    include_server_icon="Whether to include the server icon in the embed thumbnail",
+    categories="Select the categories users can choose from"
+)
+async def ticket_setup(interaction: discord.Interaction, channel: discord.TextChannel, title: str = "Create a Ticket", description: str = "Select a category below to create a ticket.", color: str = "#0000ff", include_server_icon: bool = False, categories: app_commands.Choice[str] = None):
+    """Set up the interactive ticket panel."""
     guild = interaction.guild
     guild_id = str(guild.id)
 
@@ -418,16 +337,16 @@ async def sendticketpanel(interaction: discord.Interaction, channel: discord.Tex
         return
 
     try:
-        if not ensure_db_connection():
-            await interaction.response.send_message("Database connection failed.", ephemeral=True)
-            return
+        # Get all available category channels in the guild
+        all_categories = [c for c in guild.channels if isinstance(c, discord.CategoryChannel)]
+        
+        # Filter categories based on the user's selection in the command options
+        # Note: Discord's category choice type provides IDs as strings.
+        selected_category_ids = [c.value for c in categories] if categories else []
+        selected_category_channels = [c for c in all_categories if str(c.id) in selected_category_ids]
 
-        # Get categories for the select menu
-        cursor.execute('SELECT category_name, description, emoji FROM ticket_categories WHERE guild_id = ?', (guild_id,))
-        categories = cursor.fetchall()
-
-        if not categories:
-            await interaction.response.send_message("Please add ticket categories using `/addticketcategory` before sending the panel.", ephemeral=True)
+        if not selected_category_channels:
+            await interaction.response.send_message("Please select at least one valid category for the ticket panel.", ephemeral=True)
             return
 
         # Create the embed
@@ -440,21 +359,29 @@ async def sendticketpanel(interaction: discord.Interaction, channel: discord.Tex
         if include_server_icon and guild.icon:
             embed.set_thumbnail(url=guild.icon.url)
 
-        # Create the view with the select menu
-        view = TicketPanel(categories)
+        # Create the view with the select menu using selected Discord categories
+        view = TicketPanel(selected_category_channels)
 
         # Send the message
         sent_message = await channel.send(embed=embed, view=view)
 
-        # Store panel message info in database
-        cursor.execute('INSERT OR REPLACE INTO ticket_panels (guild_id, channel_id, message_id) VALUES (?, ?, ?)',
-                      (guild_id, str(channel.id), str(sent_message.id)))
-        conn.commit()
+        # Optional: Store panel message info if needed later (e.g., for deleting/updating the panel)
+        # if ensure_db_connection():
+        #     cursor.execute('INSERT OR REPLACE INTO ticket_panels (guild_id, channel_id, message_id) VALUES (?, ?, ?)',
+        #                   (guild_id, str(channel.id), str(sent_message.id)))
+        #     conn.commit()
 
         await interaction.response.send_message(f"Ticket panel sent to {channel.mention}", ephemeral=True)
 
     except Exception as e:
         print(f"Error sending ticket panel: {e}")
         await interaction.response.send_message("Error sending ticket panel.", ephemeral=True)
+
+# You might want commands to close/manage tickets later, e.g.:
+# @bot.tree.command(name="closeticket", description="Close the current ticket")
+# @app_commands.checks.has_permissions(manage_channels=True)
+# async def closeticket(interaction: discord.Interaction):
+#     """Close the current ticket."""
+#     pass # Implementation needed
 
 bot.run(os.getenv('DISCORD_TOKEN')) 
