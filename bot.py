@@ -24,7 +24,7 @@ load_dotenv()
 
 # Debug environment variables
 # print("Checking environment variables...")
-# print(f"Current working directory: {os.getcwd()}")
+# print(f"Current working directory: {os.getcwd()}") siu
 
 # Global database variables
 conn = None
