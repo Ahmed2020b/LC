@@ -233,11 +233,17 @@ async def clear(interaction: discord.Interaction, amount: int = 5):
 # --- Ticket System --- #
 
 class TicketCategorySelect(discord.ui.Select):
-    def __init__(self, categories: list[discord.CategoryChannel], placeholder: str = "Choose a ticket category..."):
+    def __init__(self, categories: list[discord.CategoryChannel], placeholder: str = "Choose a ticket category...", custom_labels: dict = None):
         options = []
         for category in categories:
+            # Determine the label to display for the category
+            label = category.name
+            if custom_labels and category.name in custom_labels:
+                label = custom_labels[category.name]
+
             # Ensure option label is not empty and fits within Discord limits (max 100 characters)
-            label = category.name if category.name else f"Category {category.id}"
+            if not label:
+                 label = f"Category {category.id}" # Fallback if somehow label is empty after checks
             if len(label) > 100:
                 label = label[:97] + '...'
 
@@ -247,11 +253,11 @@ class TicketCategorySelect(discord.ui.Select):
             options.append(discord.SelectOption(label=label, value=value))
 
         # Ensure placeholder fits within Discord limits (max 150 characters)
-        if len(placeholder) > 150:
+        if placeholder and len(placeholder) > 150:
             placeholder = placeholder[:147] + '...'
 
         super().__init__(
-            placeholder=placeholder,
+            placeholder=placeholder if placeholder else "Choose a ticket category...", # Use default if placeholder is empty string
             min_values=1,
             max_values=1,
             options=options
@@ -326,9 +332,9 @@ class TicketCategorySelect(discord.ui.Select):
             await interaction.followup.send("Database connection failed. Cannot create ticket at this time.", ephemeral=True)
 
 class TicketPanel(discord.ui.View):
-    def __init__(self, categories: list[discord.CategoryChannel], placeholder: str = "Choose a ticket category..."):
+    def __init__(self, categories: list[discord.CategoryChannel], placeholder: str = "Choose a ticket category...", custom_labels: dict = None):
         super().__init__(timeout=None)
-        self.add_item(TicketCategorySelect(categories, placeholder=placeholder))
+        self.add_item(TicketCategorySelect(categories, placeholder=placeholder, custom_labels=custom_labels))
 
 # Removed commands for managing ticket categories
 # @bot.tree.command(name="addticketcategory", ...)
@@ -345,7 +351,8 @@ class TicketPanel(discord.ui.View):
     color="The color of the embed (hex code, e.g., #0000ff)",
     include_server_icon="Whether to include the server icon in the embed thumbnail",
     category_filter="Select a category to filter the choices in the ticket panel dropdown (optional)",
-    placeholder_text="Custom text for the dropdown menu (e.g., 'Select a ticket type')"
+    placeholder_text="Custom text for the dropdown menu (e.g., 'Select a ticket type')",
+    custom_category_labels="Comma-separated list of custom labels (e.g., 'Support->Get Help, Billing->Pay Bills')"
 )
 async def ticket_setup(
     interaction: discord.Interaction, 
@@ -355,7 +362,8 @@ async def ticket_setup(
     color: str = "#0000ff", 
     include_server_icon: bool = False,
     category_filter: discord.CategoryChannel = None,
-    placeholder_text: str = None
+    placeholder_text: str = None,
+    custom_category_labels: str = None
 ):
     """Set up the interactive ticket panel."""
     guild = interaction.guild
@@ -380,14 +388,27 @@ async def ticket_setup(
             if category_filter in all_categories:
                  categories_to_show = [category_filter]
             else:
-                 # Should not happen with discord.CategoryChannel type, but added as a safeguard
                  await interaction.response.send_message(f"The selected category filter \"{category_filter.name}\" was not found in the server.", ephemeral=True)
                  return
-                     
+                 
         # Ensure there is at least one category to show before creating the view
         if not categories_to_show:
              await interaction.response.send_message("Could not determine categories to show in the panel.", ephemeral=True)
              return
+
+        # Parse custom category labels
+        custom_labels = {}
+        if custom_category_labels:
+            try:
+                label_pairs = custom_category_labels.split(',')
+                for pair in label_pairs:
+                    if '->' in pair:
+                        name, label = pair.split('->', 1)
+                        custom_labels[name.strip()] = label.strip()
+                    # Ignore pairs without '->' to allow flexibility
+            except Exception as e:
+                print(f"Error parsing custom category labels: {e}")
+                await interaction.followup.send("Warning: Could not parse custom category labels. Using default names.", ephemeral=True)
 
         # Create the embed
         embed = discord.Embed(
@@ -399,8 +420,8 @@ async def ticket_setup(
         if include_server_icon and guild.icon:
             embed.set_thumbnail(url=guild.icon.url)
 
-        # Create the view with the select menu using the determined categories and custom placeholder
-        view = TicketPanel(categories_to_show, placeholder=placeholder_text if placeholder_text is not None else "Choose a ticket category...")
+        # Create the view with the select menu using the determined categories, custom placeholder, and custom labels
+        view = TicketPanel(categories_to_show, placeholder=placeholder_text if placeholder_text is not None else "Choose a ticket category...", custom_labels=custom_labels)
 
         # Send the message
         sent_message = await channel.send(embed=embed, view=view)
@@ -412,7 +433,6 @@ async def ticket_setup(
 
     except Exception as e:
         print(f"Error sending ticket panel: {e}")
-        # Provide a more informative ephemeral response to the user
         await interaction.followup.send(f"Failed to send ticket panel. Error: {e}", ephemeral=True)
 
 # You might want commands to close/manage tickets later, e.g.:
