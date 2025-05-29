@@ -152,38 +152,60 @@ async def on_message(message):
         return
 
     try:
-        # Ensure database connection before query
+        # Ensure database connection before query attempt
         if not ensure_db_connection():
-            print("Database connection check failed")
+            print("on_message: Initial database connection check failed.")
+            # Attempt to send an error message to the channel if possible
+            try:
+                await message.channel.send("❌ Error: Cannot connect to the database for auto-responses.")
+            except:
+                pass # Ignore if sending message fails
             return
-            
+
         current_guild_id = str(message.guild.id)
         trigger_lower = message.content.lower()
-        print(f"Checking database for trigger: {trigger_lower} in guild: {current_guild_id}")
-        
-        # Add logging to check connection/cursor state
-        print(f"Connection object is None: {conn is None}")
-        print(f"Cursor object is None: {cursor is None}")
-        if conn is not None:
-            try:
-                print(f"Connection is connected: {conn.is_connected()}")
-            except Exception as conn_check_err:
-                print(f"Error checking connection status: {conn_check_err}")
+        print(f"on_message: Processing message from guild {current_guild_id} with content '{trigger_lower}'")
 
-        # Execute the query to find matching auto-response
-        cursor.execute('SELECT response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
-                      (current_guild_id, trigger_lower))
-        result = cursor.fetchone()
-        
-        if result:
-            response = result[0]
-            print(f"Found auto-response: {response}")
-            await message.reply(response)
-        else:
-            print(f"No auto-response found for this trigger: {trigger_lower}")
+        try:
+            # Attempt to query the database
+            print(f"on_message: Attempting database query for trigger '{trigger_lower}'...")
+            cursor.execute('SELECT response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
+                          (current_guild_id, trigger_lower))
+            print("on_message: Query executed.")
+
+            result = cursor.fetchone()
+            print(f"on_message: Fetched result: {result}")
+
+            if result:
+                response = result[0]
+                print(f"on_message: Found auto-response: {response}. Replying...")
+                await message.reply(response)
+                print("on_message: Reply sent.")
+            else:
+                print(f"on_message: No auto-response found for trigger '{trigger_lower}'.")
+
+        except Exception as db_error:
+            # Catch specific database errors and try to reinitialize
+            print(f"on_message: Database error during query/fetch: {db_error}")
+            print("on_message: Attempting to reinitialize database connection due to error...")
+            if initialize_database():
+                print("on_message: Database reinitialized successfully after error.")
+                # Note: We don't retry the message here to avoid potential duplicates,
+                # but the connection should be ready for the next message.
+            else:
+                 print("on_message: Failed to reinitialize database after error.")
+                 try:
+                     await message.channel.send("❌ Error: Database connection lost. Auto-responses may not work.")
+                 except:
+                     pass # Ignore if sending message fails
 
     except Exception as e:
-        print(f"Error in auto-response processing: {e}")
+        print(f"on_message: General error in auto-response processing: {e}")
+        # Attempt to send an error message to the channel if possible
+        try:
+            await message.channel.send("❌ An unexpected error occurred while processing auto-responses.")
+        except:
+            pass # Ignore if sending message fails
 
     # IMPORTANT: This line is crucial to allow other commands to work
     await bot.process_commands(message)
