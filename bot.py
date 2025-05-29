@@ -355,7 +355,17 @@ async def ticket_setup(
         categories_to_show = all_categories
         if category_filter:
             # If a filter category is selected, only show that one category in the dropdown
-            categories_to_show = [category_filter]
+            if category_filter in all_categories:
+                 categories_to_show = [category_filter]
+            else:
+                 # Should not happen with discord.CategoryChannel type, but added as a safeguard
+                 await interaction.response.send_message(f"The selected category filter \"{category_filter.name}\" was not found in the server.", ephemeral=True)
+                 return
+                     
+        # Ensure there is at least one category to show before creating the view
+        if not categories_to_show:
+             await interaction.response.send_message("Could not determine categories to show in the panel.", ephemeral=True)
+             return
 
         # Create the embed
         embed = discord.Embed(
@@ -374,13 +384,14 @@ async def ticket_setup(
         sent_message = await channel.send(embed=embed, view=view)
 
         if category_filter:
-            await interaction.response.send_message(f"Ticket panel sent to {channel.mention}. Only the {category_filter.name} category is available for selection.", ephemeral=True)
+             await interaction.response.send_message(f"Ticket panel sent to {channel.mention}. Only the {category_filter.name} category is available for selection.", ephemeral=True)
         else:
-            await interaction.response.send_message(f"Ticket panel sent to {channel.mention}. All categories are available for selection.", ephemeral=True)
+             await interaction.response.send_message(f"Ticket panel sent to {channel.mention}. All categories are available for selection.", ephemeral=True)
 
     except Exception as e:
         print(f"Error sending ticket panel: {e}")
-        await interaction.response.send_message("Error sending ticket panel.", ephemeral=True)
+        # Provide a more informative ephemeral response to the user
+        await interaction.followup.send(f"Failed to send ticket panel. Error: {e}", ephemeral=True)
 
 # You might want commands to close/manage tickets later, e.g.:
 # @bot.tree.command(name="closeticket", description="Close the current ticket")
