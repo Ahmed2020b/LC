@@ -256,7 +256,6 @@ class TicketCategorySelect(discord.ui.Select):
 
         # Check if the user already has an open ticket
         if ensure_db_connection():
-            # Fix: Corrected SQL query syntax for status = 'open'
             cursor.execute("SELECT channel_id FROM tickets WHERE guild_id = ? AND user_id = ? AND status = 'open'", (str(guild.id), str(user.id)))
             existing_ticket = cursor.fetchone()
             if existing_ticket:
