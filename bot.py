@@ -214,27 +214,43 @@ async def on_message(message):
 @app_commands.checks.has_permissions(manage_guild=True)
 async def addresponse(interaction: discord.Interaction, trigger: str, response: str):
     """Add an auto-response trigger."""
+    guild_id = str(interaction.guild_id)
+    trigger_lower = trigger.lower()
+    print(f"addresponse: Attempting to add response for guild {guild_id}, trigger '{trigger_lower}', response '{response}'")
+
     try:
-        # Ensure database connection before insert
+        print("addresponse: Checking database connection...")
         if not ensure_db_connection():
-            await interaction.response.send_message("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
+            print("addresponse: Database connection check failed.")
+            await interaction.response.send_message("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.", ephemeral=True)
             return
-                
-        cursor.execute('INSERT OR REPLACE INTO auto_responses (guild_id, trigger, response) VALUES (?, ?, ?)',
-                      (str(interaction.guild_id), trigger.lower(), response))
-    except Exception as db_error:
-        print(f"Database insert error: {db_error}")
-        await interaction.response.send_message("حدث خطأ أثناء حفظ الرد في قاعدة البيانات. يرجى المحاولة مرة أخرى.")
-        return
-        
-    try:
-        conn.commit()
-    except Exception as commit_error:
-        print(f"Database commit error: {commit_error}")
-        await interaction.response.send_message("حدث خطأ أثناء حفظ التغييرات. يرجى المحاولة مرة أخرى.")
-        return
-        
-    await interaction.response.send_message(f'تم إضافة الرد التلقائي: عندما يكتب أحد "{trigger}" سيرد البوت "{response}"')
+
+        print("addresponse: Connection ensured. Preparing to execute INSERT OR REPLACE.")
+        try:
+            cursor.execute('INSERT OR REPLACE INTO auto_responses (guild_id, trigger, response) VALUES (?, ?, ?)',
+                          (guild_id, trigger_lower, response))
+            print("addresponse: INSERT OR REPLACE executed.")
+        except Exception as db_execute_error:
+            print(f"addresponse: Database execute error: {db_execute_error}")
+            await interaction.response.send_message("حدث خطأ أثناء حفظ الرد في قاعدة البيانات (تنفيذ). يرجى المحاولة مرة أخرى.", ephemeral=True)
+            return
+
+        print("addresponse: Preparing to commit changes.")
+        try:
+            conn.commit()
+            print("addresponse: Changes committed.")
+        except Exception as db_commit_error:
+            print(f"addresponse: Database commit error: {db_commit_error}")
+            await interaction.response.send_message("حدث خطأ أثناء حفظ التغييرات (كوميت). يرجى المحاولة مرة أخرى.", ephemeral=True)
+            return
+
+        print("addresponse: Successfully added/updated response. Sending confirmation.")
+        await interaction.response.send_message(f'تم إضافة الرد التلقائي: عندما يكتب أحد "{trigger}" سيرد البوت "{response}"')
+        print("addresponse: Confirmation message sent.")
+
+    except Exception as e:
+        print(f'addresponse: An unexpected error occurred: {e}')
+        await interaction.response.send_message(f'حدث خطأ غير متوقع أثناء إضافة الرد التلقائي: {e}', ephemeral=True)
 
 @bot.tree.command(name="removeresponse", description="Remove an auto-response trigger")
 @app_commands.checks.has_permissions(manage_guild=True)
@@ -268,23 +284,43 @@ async def removeresponse(interaction: discord.Interaction, trigger: str):
 @app_commands.checks.has_permissions(manage_guild=True)
 async def listresponses(interaction: discord.Interaction):
     """List all auto-response triggers."""
+    guild_id = str(interaction.guild_id)
+    print(f"listresponses: Attempting to list responses for guild {guild_id}")
+
     try:
+        print("listresponses: Checking database connection...")
         if not ensure_db_connection():
-            await interaction.response.send_message("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
+            print("listresponses: Database connection check failed.")
+            await interaction.response.send_message("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.", ephemeral=True)
             return
-                    
-        cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ?',
-                      (str(interaction.guild_id),))
-        responses = cursor.fetchall()
+
+        print("listresponses: Connection ensured. Preparing to execute SELECT.")
+        try:
+            cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ?',
+                          (guild_id,))
+            print("listresponses: SELECT executed.")
+
+            responses = cursor.fetchall()
+            print(f"listresponses: Fetched results: {responses}")
+
+        except Exception as db_execute_error:
+            print(f"listresponses: Database execute error: {db_execute_error}")
+            await interaction.response.send_message("حدث خطأ أثناء عرض الردود التلقائية (تنفيذ). يرجى المحاولة مرة أخرى.", ephemeral=True)
+            return
 
         if responses:
             response_list = '\n'.join([f'• "{trigger}" → "{response}"' for trigger, response in responses])
+            print(f"listresponses: Found {len(responses)} responses. Sending list.")
             await interaction.response.send_message(f'**قائمة الردود التلقائية:**\n{response_list}')
+            print("listresponses: List sent.")
         else:
+            print("listresponses: No responses found.")
             await interaction.response.send_message('لا توجد ردود تلقائية مضافة.')
+            print("listresponses: No responses message sent.")
+
     except Exception as e:
-        print(f'حدث خطأ أثناء عرض الردود التلقائية: {e}')
-        await interaction.response.send_message(f'حدث خطأ أثناء عرض الردود التلقائية: {e}')
+        print(f'listresponses: An unexpected error occurred: {e}')
+        await interaction.response.send_message(f'حدث خطأ غير متوقع أثناء عرض الردود التلقائية: {e}', ephemeral=True)
 
 @bot.tree.command(name="kick", description="Kick a member from the server")
 @app_commands.checks.has_permissions(kick_members=True)
