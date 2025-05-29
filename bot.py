@@ -280,7 +280,7 @@ class TicketCategorySelect(discord.ui.Select):
             try:
                 ticket_channel = await guild.create_text_channel(
                     f'ticket-{user.name}',
-                    category=selected_category,
+                    category=selected_category,  # Create the ticket in the selected category
                     overwrites=overwrites
                 )
 
@@ -323,10 +323,16 @@ class TicketPanel(discord.ui.View):
     title="The title of the ticket panel embed",
     description="The description of the ticket panel embed",
     color="The color of the embed (hex code, e.g., #0000ff)",
-    include_server_icon="Whether to include the server icon in the embed thumbnail",
-    categories="Select the categories users can choose from"
+    include_server_icon="Whether to include the server icon in the embed thumbnail"
 )
-async def ticket_setup(interaction: discord.Interaction, channel: discord.TextChannel, title: str = "Create a Ticket", description: str = "Select a category below to create a ticket.", color: str = "#0000ff", include_server_icon: bool = False, categories: app_commands.Choice[str] = None):
+async def ticket_setup(
+    interaction: discord.Interaction, 
+    channel: discord.TextChannel,
+    title: str = "Create a Ticket", 
+    description: str = "Select a category below to create a ticket.", 
+    color: str = "#0000ff", 
+    include_server_icon: bool = False
+):
     """Set up the interactive ticket panel."""
     guild = interaction.guild
     guild_id = str(guild.id)
@@ -339,13 +345,8 @@ async def ticket_setup(interaction: discord.Interaction, channel: discord.TextCh
         # Get all available category channels in the guild
         all_categories = [c for c in guild.channels if isinstance(c, discord.CategoryChannel)]
         
-        # Filter categories based on the user's selection in the command options
-        # Note: Discord's category choice type provides IDs as strings.
-        selected_category_ids = [c.value for c in categories] if categories else []
-        selected_category_channels = [c for c in all_categories if str(c.id) in selected_category_ids]
-
-        if not selected_category_channels:
-            await interaction.response.send_message("Please select at least one valid category for the ticket panel.", ephemeral=True)
+        if not all_categories:
+            await interaction.response.send_message("No categories found in this server. Please create at least one category first.", ephemeral=True)
             return
 
         # Create the embed
@@ -358,17 +359,11 @@ async def ticket_setup(interaction: discord.Interaction, channel: discord.TextCh
         if include_server_icon and guild.icon:
             embed.set_thumbnail(url=guild.icon.url)
 
-        # Create the view with the select menu using selected Discord categories
-        view = TicketPanel(selected_category_channels)
+        # Create the view with the select menu using all categories
+        view = TicketPanel(all_categories)
 
         # Send the message
         sent_message = await channel.send(embed=embed, view=view)
-
-        # Optional: Store panel message info if needed later (e.g., for deleting/updating the panel)
-        # if ensure_db_connection():
-        #     cursor.execute('INSERT OR REPLACE INTO ticket_panels (guild_id, channel_id, message_id) VALUES (?, ?, ?)',
-        #                   (guild_id, str(channel.id), str(sent_message.id)))
-        #     conn.commit()
 
         await interaction.response.send_message(f"Ticket panel sent to {channel.mention}", ephemeral=True)
 
