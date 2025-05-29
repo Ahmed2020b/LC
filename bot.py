@@ -77,6 +77,27 @@ def initialize_database():
                 
                 # Note: Auto-response table creation is removed here.
                 
+                # Create ticket categories table if it doesn't exist
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS ticket_categories (
+                        guild_id TEXT,
+                        category_name TEXT,
+                        description TEXT,
+                        emoji TEXT,
+                        PRIMARY KEY (guild_id, category_name)
+                    )
+                ''')
+
+                # Create ticket panels table if it doesn't exist
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS ticket_panels (
+                        guild_id TEXT,
+                        channel_id TEXT,
+                        message_id TEXT UNIQUE,
+                        PRIMARY KEY (guild_id, message_id)
+                    )
+                ''')
+                
                 conn.commit()
                 print("Successfully connected to the database!")
                 return True
@@ -198,7 +219,19 @@ async def unmute(interaction: discord.Interaction, member: discord.Member):
 @app_commands.checks.has_permissions(manage_messages=True)
 async def clear(interaction: discord.Interaction, amount: int = 5):
     """Clear a number of messages (default 5)."""
-    await interaction.channel.purge(limit=amount+1)
-    await interaction.response.send_message(f'تم حذف {amount} رسالة!', delete_after=3)
+    # Defer the interaction to prevent timeout
+    await interaction.response.defer(ephemeral=True)
+
+    try:
+        # Purge messages
+        deleted = await interaction.channel.purge(limit=amount + 1)
+        # Send a follow-up message after the purge is complete
+        await interaction.followup.send(f'تم حذف {len(deleted) - 1} رسالة!', ephemeral=True)
+    except Exception as e:
+        print(f"Error clearing messages: {e}")
+        try:
+            await interaction.followup.send("حدث خطأ أثناء حذف الرسائل.", ephemeral=True)
+        except:
+            pass # Ignore if sending error message fails
 
 bot.run(os.getenv('DISCORD_TOKEN')) 
