@@ -324,7 +324,7 @@ class TicketPanel(discord.ui.View):
     description="The description of the ticket panel embed",
     color="The color of the embed (hex code, e.g., #0000ff)",
     include_server_icon="Whether to include the server icon in the embed thumbnail",
-    categories="A comma-separated list of category names to include in the ticket panel"
+    category_filter="Select a category to filter the choices in the ticket panel dropdown (optional)"
 )
 async def ticket_setup(
     interaction: discord.Interaction, 
@@ -333,7 +333,7 @@ async def ticket_setup(
     description: str = "Select a category below to create a ticket.", 
     color: str = "#0000ff", 
     include_server_icon: bool = False,
-    categories: str = None
+    category_filter: discord.CategoryChannel = None
 ):
     """Set up the interactive ticket panel."""
     guild = interaction.guild
@@ -351,18 +351,11 @@ async def ticket_setup(
             await interaction.response.send_message("No categories found in this server. Please create at least one category first.", ephemeral=True)
             return
 
-        # Filter categories based on the provided names
-        selected_categories = []
-        if categories:
-            category_names = [name.strip() for name in categories.split(',')]
-            selected_categories = [c for c in all_categories if c.name in category_names]
-            
-            if not selected_categories:
-                await interaction.response.send_message("None of the specified categories were found. Please check the category names and try again.", ephemeral=True)
-                return
-        else:
-            # If no categories are specified, use all of them
-            selected_categories = all_categories
+        # Determine which categories to show in the panel dropdown
+        categories_to_show = all_categories
+        if category_filter:
+            # If a filter category is selected, only show that one category in the dropdown
+            categories_to_show = [category_filter]
 
         # Create the embed
         embed = discord.Embed(
@@ -374,13 +367,16 @@ async def ticket_setup(
         if include_server_icon and guild.icon:
             embed.set_thumbnail(url=guild.icon.url)
 
-        # Create the view with the select menu using only the selected categories
-        view = TicketPanel(selected_categories)
+        # Create the view with the select menu using the determined categories
+        view = TicketPanel(categories_to_show)
 
         # Send the message
         sent_message = await channel.send(embed=embed, view=view)
 
-        await interaction.response.send_message(f"Ticket panel sent to {channel.mention}. The following categories are available: {', '.join([c.name for c in selected_categories])}", ephemeral=True)
+        if category_filter:
+            await interaction.response.send_message(f"Ticket panel sent to {channel.mention}. Only the {category_filter.name} category is available for selection.", ephemeral=True)
+        else:
+            await interaction.response.send_message(f"Ticket panel sent to {channel.mention}. All categories are available for selection.", ephemeral=True)
 
     except Exception as e:
         print(f"Error sending ticket panel: {e}")
