@@ -289,7 +289,7 @@ class TicketCategorySelect(discord.ui.Select):
 
         # Check if the user already has an open ticket
         if ensure_db_connection():
-            cursor.execute('SELECT channel_id FROM tickets WHERE guild_id = ? AND user_id = ? AND status = 'open'', (str(guild.id), str(user.id)))
+            cursor.execute("SELECT channel_id FROM tickets WHERE guild_id = ? AND user_id = ? AND status = 'open'", (str(guild.id), str(user.id)))
             existing_ticket = cursor.fetchone()
             if existing_ticket:
                 await interaction.response.send_message(f"You already have an open ticket in <#{existing_ticket[0]}>.", ephemeral=True)
