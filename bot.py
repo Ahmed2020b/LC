@@ -75,20 +75,7 @@ def initialize_database():
                 # Test the connection with a simple query
                 cursor.execute('SELECT 1')
                 
-                # Create auto-responder table if it doesn't exist
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS auto_responses (
-                        guild_id TEXT,
-                        trigger TEXT,
-                        response TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        PRIMARY KEY (guild_id, trigger)
-                    )
-                ''')
-                
-                # Create index for faster lookups
-                cursor.execute('CREATE INDEX IF NOT EXISTS idx_guild_trigger ON auto_responses(guild_id, trigger)')
+                # Note: Auto-response table creation is removed here.
                 
                 conn.commit()
                 print("Successfully connected to the database!")
@@ -151,177 +138,12 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    try:
-        # Ensure database connection before query attempt
-        if not ensure_db_connection():
-            print("on_message: Initial database connection check failed.")
-            # Attempt to send an error message to the channel if possible
-            try:
-                await message.channel.send("❌ Error: Cannot connect to the database for auto-responses.")
-            except:
-                pass # Ignore if sending message fails
-            return
-
-        current_guild_id = str(message.guild.id)
-        trigger_lower = message.content.lower()
-        print(f"on_message: Processing message from guild {current_guild_id} with content '{trigger_lower}'")
-
-        try:
-            # Attempt to query the database
-            print(f"on_message: Attempting database query for trigger '{trigger_lower}'...")
-            cursor.execute('SELECT response FROM auto_responses WHERE guild_id = ? AND trigger = ?', 
-                          (current_guild_id, trigger_lower))
-            print("on_message: Query executed.")
-
-            result = cursor.fetchone()
-            print(f"on_message: Fetched result: {result}")
-
-            if result:
-                response = result[0]
-                print(f"on_message: Found auto-response: {response}. Replying...")
-                await message.reply(response)
-                print("on_message: Reply sent.")
-            else:
-                print(f"on_message: No auto-response found for trigger '{trigger_lower}'.")
-
-        except Exception as db_error:
-            # Catch specific database errors and try to reinitialize
-            print(f"on_message: Database error during query/fetch: {db_error}")
-            print("on_message: Attempting to reinitialize database connection due to error...")
-            if initialize_database():
-                print("on_message: Database reinitialized successfully after error.")
-                # Note: We don't retry the message here to avoid potential duplicates,
-                # but the connection should be ready for the next message.
-            else:
-                 print("on_message: Failed to reinitialize database after error.")
-                 try:
-                     await message.channel.send("❌ Error: Database connection lost. Auto-responses may not work.")
-                 except:
-                     pass # Ignore if sending message fails
-
-    except Exception as e:
-        print(f"on_message: General error in auto-response processing: {e}")
-        # Attempt to send an error message to the channel if possible
-        try:
-            await message.channel.send("❌ An unexpected error occurred while processing auto-responses.")
-        except:
-            pass # Ignore if sending message fails
-
     # IMPORTANT: This line is crucial to allow other commands to work
     await bot.process_commands(message)
 
-@bot.tree.command(name="addresponse", description="Add an auto-response trigger")
-@app_commands.checks.has_permissions(manage_guild=True)
-async def addresponse(interaction: discord.Interaction, trigger: str, response: str):
-    """Add an auto-response trigger."""
-    guild_id = str(interaction.guild_id)
-    trigger_lower = trigger.lower()
-    print(f"addresponse: Attempting to add response for guild {guild_id}, trigger '{trigger_lower}', response '{response}'")
+# Removed auto-response commands (addresponse, removeresponse, listresponses)
 
-    try:
-        print("addresponse: Checking database connection...")
-        if not ensure_db_connection():
-            print("addresponse: Database connection check failed.")
-            await interaction.response.send_message("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.", ephemeral=True)
-            return
-
-        print("addresponse: Connection ensured. Preparing to execute INSERT OR REPLACE.")
-        try:
-            cursor.execute('INSERT OR REPLACE INTO auto_responses (guild_id, trigger, response) VALUES (?, ?, ?)',
-                          (guild_id, trigger_lower, response))
-            print("addresponse: INSERT OR REPLACE executed.")
-        except Exception as db_execute_error:
-            print(f"addresponse: Database execute error: {db_execute_error}")
-            await interaction.response.send_message("حدث خطأ أثناء حفظ الرد في قاعدة البيانات (تنفيذ). يرجى المحاولة مرة أخرى.", ephemeral=True)
-            return
-
-        print("addresponse: Preparing to commit changes.")
-        try:
-            conn.commit()
-            print("addresponse: Changes committed.")
-        except Exception as db_commit_error:
-            print(f"addresponse: Database commit error: {db_commit_error}")
-            await interaction.response.send_message("حدث خطأ أثناء حفظ التغييرات (كوميت). يرجى المحاولة مرة أخرى.", ephemeral=True)
-            return
-
-        print("addresponse: Successfully added/updated response. Sending confirmation.")
-        await interaction.response.send_message(f'تم إضافة الرد التلقائي: عندما يكتب أحد "{trigger}" سيرد البوت "{response}"')
-        print("addresponse: Confirmation message sent.")
-
-    except Exception as e:
-        print(f'addresponse: An unexpected error occurred: {e}')
-        await interaction.response.send_message(f'حدث خطأ غير متوقع أثناء إضافة الرد التلقائي: {e}', ephemeral=True)
-
-@bot.tree.command(name="removeresponse", description="Remove an auto-response trigger")
-@app_commands.checks.has_permissions(manage_guild=True)
-async def removeresponse(interaction: discord.Interaction, trigger: str):
-    """Remove an auto-response trigger."""
-    try:
-        if not ensure_db_connection():
-            await interaction.response.send_message("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.")
-            return
-
-        cursor.execute('DELETE FROM auto_responses WHERE guild_id = ? AND trigger = ?',
-                      (str(interaction.guild_id), trigger.lower()))
-    except Exception as db_error:
-        print(f"Database delete error: {db_error}")
-        await interaction.response.send_message("حدث خطأ أثناء حذف الرد من قاعدة البيانات. يرجى المحاولة مرة أخرى.")
-        return
-
-    try:
-        conn.commit()
-    except Exception as commit_error:
-        print(f"Database commit error: {commit_error}")
-        await interaction.response.send_message("حدث خطأ أثناء حفظ التغييرات. يرجى المحاولة مرة أخرى.")
-        return
-
-    if cursor.rowcount > 0:
-        await interaction.response.send_message(f'تم حذف الرد التلقائي "{trigger}"')
-    else:
-        await interaction.response.send_message(f'لم يتم العثور على رد تلقائي بهذا المحفز "{trigger}"')
-
-@bot.tree.command(name="listresponses", description="List all auto-response triggers")
-@app_commands.checks.has_permissions(manage_guild=True)
-async def listresponses(interaction: discord.Interaction):
-    """List all auto-response triggers."""
-    guild_id = str(interaction.guild_id)
-    print(f"listresponses: Attempting to list responses for guild {guild_id}")
-
-    try:
-        print("listresponses: Checking database connection...")
-        if not ensure_db_connection():
-            print("listresponses: Database connection check failed.")
-            await interaction.response.send_message("فشل الاتصال بقاعدة البيانات. يرجى المحاولة مرة أخرى.", ephemeral=True)
-            return
-
-        print("listresponses: Connection ensured. Preparing to execute SELECT.")
-        try:
-            cursor.execute('SELECT trigger, response FROM auto_responses WHERE guild_id = ?',
-                          (guild_id,))
-            print("listresponses: SELECT executed.")
-
-            responses = cursor.fetchall()
-            print(f"listresponses: Fetched results: {responses}")
-
-        except Exception as db_execute_error:
-            print(f"listresponses: Database execute error: {db_execute_error}")
-            await interaction.response.send_message("حدث خطأ أثناء عرض الردود التلقائية (تنفيذ). يرجى المحاولة مرة أخرى.", ephemeral=True)
-            return
-
-        if responses:
-            response_list = '\n'.join([f'• "{trigger}" → "{response}"' for trigger, response in responses])
-            print(f"listresponses: Found {len(responses)} responses. Sending list.")
-            await interaction.response.send_message(f'**قائمة الردود التلقائية:**\n{response_list}')
-            print("listresponses: List sent.")
-        else:
-            print("listresponses: No responses found.")
-            await interaction.response.send_message('لا توجد ردود تلقائية مضافة.')
-            print("listresponses: No responses message sent.")
-
-    except Exception as e:
-        print(f'listresponses: An unexpected error occurred: {e}')
-        await interaction.response.send_message(f'حدث خطأ غير متوقع أثناء عرض الردود التلقائية: {e}', ephemeral=True)
-
+# Add moderation commands (keeping these as they are not related to auto-responses)
 @bot.tree.command(name="kick", description="Kick a member from the server")
 @app_commands.checks.has_permissions(kick_members=True)
 async def kick(interaction: discord.Interaction, member: discord.Member, reason: str = None):
