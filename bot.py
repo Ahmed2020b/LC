@@ -292,7 +292,7 @@ class TicketCategorySelect(discord.ui.Select):
                 # Send initial message in the ticket channel
                 embed = discord.Embed(
                     title=f"New Ticket in {selected_category.name}",
-                    description=f"User: {user.mention}\nCategory: {selected_category.name}",
+                    description=f"User: {user.mention}\nCategory: {selected_category.mention}",
                     color=discord.Color.blue()
                 )
                 await ticket_channel.send(embed=embed)
